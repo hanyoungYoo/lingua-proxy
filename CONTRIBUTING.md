@@ -57,6 +57,22 @@ A test asserts the README quotes the same number as
 `tests/fixtures/bench_recorded.json`, so the two cannot drift apart. Note that
 the benchmark spends real money and refuses to guess an endpoint for you.
 
+## Releasing
+
+Releases are published to PyPI by CI, never from a laptop. The workflow uses
+PyPI Trusted Publishing, so there is no API token to store or rotate.
+
+1. Update the version in `pyproject.toml` and add a section to `CHANGELOG.md`.
+2. Commit, then tag and push:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+The release workflow runs the tests, refuses to continue if the tag disagrees
+with the packaged version, builds, and publishes. A version number on PyPI can
+never be reused, which is why the check exists.
+
 ## Reporting bugs
 
 Please include the output of `lingua-proxy doctor`, which redacts credentials.
