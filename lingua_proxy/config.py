@@ -166,6 +166,12 @@ class Settings:
     # streaming
     ping_interval: float = 15.0
 
+    # Transparency. A wrong translation is fluent and passes every structural
+    # check, so the defence is visibility rather than detection: the audit log
+    # records both sides of every rewrite. Off by default because it writes
+    # prompt text to disk.
+    audit_log_path: pathlib.Path | None = None
+
     @classmethod
     def resolve(
         cls,

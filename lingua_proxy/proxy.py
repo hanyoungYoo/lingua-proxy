@@ -22,12 +22,14 @@ import json
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from urllib.parse import quote
 
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from lingua_proxy import __version__
+from lingua_proxy.audit import AuditLog
 from lingua_proxy.codecs import AnthropicMessagesCodec, Codec, OpenAIChatCodec
 from lingua_proxy.config import Settings, join_upstream
 from lingua_proxy.cost_log import CostLog, CostRow, estimate_tokens, summarize
@@ -155,6 +157,29 @@ def _wants_bypass(request: Request) -> bool:
     return request.headers.get("x-lingua-bypass", "").strip().lower() in _BYPASS_VALUES
 
 
+def _wants_review(request: Request) -> bool:
+    """Review mode: show the translation without spending a model request."""
+    return request.headers.get("x-lingua-review", "").strip().lower() in _BYPASS_VALUES
+
+
+def _transparency_headers(
+    source: str | None, translated_prompt: str | None = None
+) -> dict[str, str]:
+    """Tell the client whether, and how, its prompt was rewritten.
+
+    Header values must be latin-1 encodable, so the echoed prompt is
+    percent-encoded rather than sent raw.
+    """
+    headers = {"x-lingua-translated": "true" if source else "false"}
+    if source:
+        headers["x-lingua-source-lang"] = source
+    if translated_prompt:
+        encoded = quote(translated_prompt, safe="")
+        # Keep well clear of common header-size limits.
+        headers["x-lingua-prompt-en"] = encoded[:3800]
+    return headers
+
+
 def _get_pipeline(request: Request) -> Pipeline:
     """Build the pipeline for this request.
 
@@ -255,6 +280,100 @@ def record_cost(
         request.app.state.cost_log.record(row)
 
 
+async def review_translation(
+    request: Request,
+    codec: Codec,
+    body: dict,
+    pipeline: Pipeline,
+    source: str | None,
+) -> Response:
+    """Return the English the model *would* be sent, without sending it.
+
+    Lets a user sanity-check a translation before paying for a request, which
+    is the only way to catch a fluent-but-wrong rendering before it matters.
+    """
+    if source is None:
+        return JSONResponse(
+            content={
+                "lingua_review": True,
+                "would_translate": False,
+                "reason": "input was detected as English, or was too short to judge",
+            },
+            headers=_transparency_headers(None),
+        )
+
+    try:
+        forwarded, _ = await pipeline.translate_request(body, codec, source)
+    except TranslationSkipped as exc:
+        return JSONResponse(
+            content={
+                "lingua_review": True,
+                "would_translate": False,
+                "reason": f"translation failed, the original text would be sent unchanged: {exc}",
+            },
+            headers=_transparency_headers(None),
+        )
+
+    original = [ref.text for ref in codec.user_refs(body)]
+    english = [ref.text for ref in codec.user_refs(forwarded)]
+
+    return JSONResponse(
+        content={
+            "lingua_review": True,
+            "would_translate": True,
+            "source_lang": source,
+            "original_prompt": "\n".join(original),
+            "translated_prompt": "\n".join(english),
+            "note": (
+                "This is what the model would receive. If it does not match your "
+                "intent, rephrase, or resend with the header 'x-lingua-bypass: true' "
+                "to skip translation for that request."
+            ),
+        },
+        headers=_transparency_headers(source, "\n".join(english)),
+    )
+
+
+def record_audit(
+    request: Request,
+    codec: Codec,
+    original_body: dict,
+    forwarded_body: dict,
+    outcome,
+    source: str,
+) -> None:
+    """Record both sides of a rewrite, when auditing is switched on."""
+    audit: AuditLog = request.app.state.audit_log
+    if not audit.enabled or not outcome.translated:
+        return
+
+    model = codec.model(original_body)
+    for before, after in zip(
+        [ref.text for ref in codec.user_refs(original_body)],
+        [ref.text for ref in codec.user_refs(forwarded_body)],
+        strict=False,
+    ):
+        if before != after:
+            audit.record(
+                direction="request",
+                source_lang=source,
+                target_lang="en",
+                original=before,
+                translated=after,
+                model=model,
+            )
+
+    for english, localized in zip(outcome.english_texts, outcome.translated_texts, strict=False):
+        audit.record(
+            direction="response",
+            source_lang="en",
+            target_lang=source,
+            original=english,
+            translated=localized,
+            model=model,
+        )
+
+
 async def stream_translated(
     request: Request,
     codec: Codec,
@@ -336,8 +455,14 @@ async def handle(request: Request, codec: Codec, upstream_base: str) -> Response
         return await relay(request, upstream_base)
 
     source = pipeline.conversation_language(body, codec)
+
+    if _wants_review(request):
+        return await review_translation(request, codec, body, pipeline, source)
+
     if source is None:
-        return await relay(request, upstream_base)
+        response = await relay(request, upstream_base)
+        response.headers.update(_transparency_headers(None))
+        return response
 
     try:
         forwarded, outcome = await pipeline.translate_request(body, codec, source)
@@ -376,11 +501,16 @@ async def handle(request: Request, codec: Codec, upstream_base: str) -> Response
     localized = await pipeline.translate_response(response_body, codec, source, outcome)
 
     record_cost(request, codec, body, forwarded, response_body, localized, outcome, started)
+    record_audit(request, codec, body, forwarded, outcome, source)
+
+    headers = build_response_headers(upstream)
+    sent_english = " ".join(ref.text for ref in codec.user_refs(forwarded))
+    headers.update(_transparency_headers(source, sent_english))
 
     return JSONResponse(
         content=localized,
         status_code=upstream.status_code,
-        headers=build_response_headers(upstream),
+        headers=headers,
     )
 
 
@@ -418,6 +548,7 @@ def create_app(
     app.state.pipeline = None
     app.state.detector = detector
     app.state.cost_log = CostLog(path=settings.cost_log_path)
+    app.state.audit_log = AuditLog(path=settings.audit_log_path)
     # A real translator is built on first use when one was not injected.
     # Without this the pipeline would fail open on every request and silently
     # behave as a plain passthrough.

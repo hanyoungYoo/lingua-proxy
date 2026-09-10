@@ -147,6 +147,12 @@ can shift. Markdown tables are best-effort. If a translation fails or mangles a
 protected placeholder, the request falls back to passing your original text
 through untranslated rather than sending you something wrong.
 
+That covers translations that *break*. It does not cover translations that are
+fluent and simply wrong — a dropped negation turning "do not delete this" into
+"delete this" passes every structural check there is. No automated check can
+catch that, so the proxy does not pretend to. See
+[When a translation is wrong](#when-a-translation-is-wrong).
+
 **Prompt caching.** The proxy rewrites conversation history, so cache stability
 depends on the memo. Deleting the memo file, or letting entries age out of a
 long conversation, causes a one-time cache miss on the next turn.
@@ -164,6 +170,66 @@ same credential your client already sends, so there is no second key to manage.
 If your credential is a personal subscription token, check that automated
 translation calls are within its terms, or set `translator.api_key` to a
 separate key.
+
+## When a translation is wrong
+
+A translation can be grammatical, well-formed, and still mean the wrong thing.
+This is the real risk of putting a model in the middle of your prompts, and it
+is worth being direct: **the proxy cannot detect it.** Every check it performs
+is structural — did the request succeed, did the segments come back, did the
+code placeholders survive. A confidently inverted negation passes all of them.
+
+So the defence is visibility rather than detection.
+
+**Every translated response says so.** Three headers come back on each reply:
+
+| Header | Meaning |
+| --- | --- |
+| `x-lingua-translated` | `true` or `false` |
+| `x-lingua-source-lang` | the language that was detected |
+| `x-lingua-prompt-en` | the English the model actually received, percent-encoded |
+
+If an answer looks like it addressed a different question, that third header
+tells you whether the model misunderstood you or the proxy mistranslated you.
+
+**Check before you spend.** Send `x-lingua-review: true` and the proxy returns
+the translation without calling the model at all:
+
+```bash
+curl -s http://127.0.0.1:8787/v1/messages   -H "x-lingua-review: true" -H "content-type: application/json"   -d '{"model":"claude-sonnet-4-6","messages":[{"role":"user","content":"이 함수를 삭제하지 말고 설명만 해줘"}]}'
+```
+
+```json
+{
+  "lingua_review": true,
+  "would_translate": true,
+  "source_lang": "ko",
+  "translated_prompt": "Don't delete this function, just explain it."
+}
+```
+
+**Skip translation when it matters.** Any request carrying
+`x-lingua-bypass: true` goes through untouched. For work where a subtle shift
+in meaning is unacceptable — legal text, medical content, exact quotations,
+anything you would not want paraphrased — use the bypass header, or do not
+route it through this proxy at all.
+
+**Keep a record.** Set `audit_log_path` in your config to log both sides of
+every rewrite:
+
+```toml
+audit_log_path = "~/.lingua-proxy/audit.jsonl"
+```
+
+Each line holds the original, the translation, and the direction, so a
+mistranslation can be found after the fact. It is off by default because,
+unlike the cost log, it necessarily contains your prompt text.
+
+**What this means in practice.** Translation is a lossy transformation applied
+to your words. It is a good trade for ordinary conversational prompts, where a
+slight rewording changes nothing. It is a poor trade when the exact wording is
+the point. The proxy gives you the tools to see what it did and to turn it off
+per request; deciding which of your traffic can tolerate it is yours to make.
 
 ## Using it behind an existing gateway
 

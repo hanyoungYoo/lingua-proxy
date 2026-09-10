@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Transparency controls for translation errors. A translation can be fluent and
+  still wrong, and no structural check can catch that, so the proxy now makes
+  the rewrite visible instead of implying it is trustworthy:
+  - `x-lingua-translated`, `x-lingua-source-lang` and `x-lingua-prompt-en`
+    response headers, so a client can see whether and how its prompt changed.
+  - `x-lingua-review: true` request header, which returns the translation
+    without calling the model, to check a prompt before spending a request.
+  - Optional `audit_log_path`, recording both sides of every rewrite. Off by
+    default because it contains prompt text.
+
 ## [0.1.0] - 2026-09-10
 
 First release. Alpha: the interfaces may still change.
