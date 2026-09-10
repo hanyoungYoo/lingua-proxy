@@ -1,8 +1,9 @@
-"""Do not translate requests whose reply will be too long to be worth it.
+"""Do not translate requests whose reply is likely to hit the token ceiling.
 
-Translation cost scales with the answer, while the saving does not. Past a
-certain reply length the fee outruns the benefit, so the proxy declines rather
-than quietly losing the user money.
+A truncated reply is pinned to the same length in both languages, so it cannot
+shrink, and the translation fee is charged for a saving that never happens.
+Length by itself does not decide profitability -- shrink ratio does -- but a
+very large ceiling is a reliable warning sign.
 """
 
 from __future__ import annotations
@@ -42,12 +43,12 @@ async def post(app, body, **kw):
 
 
 async def test_request_with_a_huge_max_tokens_is_not_translated():
-    app, transport, translator = build(max_output_tokens_for_translation=4000)
+    app, transport, translator = build(max_output_tokens_for_translation=16000)
     await post(
         app,
         {
             "model": "claude-sonnet-4-6",
-            "max_tokens": 32000,
+            "max_tokens": 64000,
             "messages": [{"role": "user", "content": KOREAN}],
         },
     )
@@ -57,12 +58,12 @@ async def test_request_with_a_huge_max_tokens_is_not_translated():
 
 
 async def test_request_with_a_modest_max_tokens_is_translated():
-    app, _, translator = build(max_output_tokens_for_translation=4000)
+    app, _, translator = build(max_output_tokens_for_translation=16000)
     await post(
         app,
         {
             "model": "claude-sonnet-4-6",
-            "max_tokens": 1000,
+            "max_tokens": 2000,
             "messages": [{"role": "user", "content": KOREAN}],
         },
     )
@@ -76,7 +77,7 @@ async def test_the_guard_can_be_switched_off():
         app,
         {
             "model": "claude-sonnet-4-6",
-            "max_tokens": 100000,
+            "max_tokens": 200000,
             "messages": [{"role": "user", "content": KOREAN}],
         },
     )
@@ -86,7 +87,7 @@ async def test_the_guard_can_be_switched_off():
 
 async def test_a_request_without_max_tokens_is_still_translated():
     """Absent a ceiling we cannot predict the length, so behave as before."""
-    app, _, translator = build(max_output_tokens_for_translation=4000)
+    app, _, translator = build(max_output_tokens_for_translation=16000)
     await post(
         app, {"model": "claude-sonnet-4-6", "messages": [{"role": "user", "content": KOREAN}]}
     )
@@ -95,12 +96,12 @@ async def test_a_request_without_max_tokens_is_still_translated():
 
 
 async def test_skipped_request_is_marked_as_untranslated():
-    app, _, _ = build(max_output_tokens_for_translation=4000)
+    app, _, _ = build(max_output_tokens_for_translation=16000)
     resp = await post(
         app,
         {
             "model": "claude-sonnet-4-6",
-            "max_tokens": 32000,
+            "max_tokens": 64000,
             "messages": [{"role": "user", "content": KOREAN}],
         },
     )
@@ -109,12 +110,12 @@ async def test_skipped_request_is_marked_as_untranslated():
 
 
 async def test_skip_reason_is_reported_so_a_user_can_tell_why():
-    app, _, _ = build(max_output_tokens_for_translation=4000)
+    app, _, _ = build(max_output_tokens_for_translation=16000)
     resp = await post(
         app,
         {
             "model": "claude-sonnet-4-6",
-            "max_tokens": 32000,
+            "max_tokens": 64000,
             "messages": [{"role": "user", "content": KOREAN}],
         },
     )

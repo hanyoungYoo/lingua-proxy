@@ -172,12 +172,16 @@ class Settings:
     # prompt text to disk.
     audit_log_path: pathlib.Path | None = None
 
-    # Translation cost scales with the length of the reply, while the saving
-    # does not. Past a few thousand output tokens the fee outruns the benefit,
-    # so a request that asks for a very long answer is passed through instead.
-    # Measured: a bounded answer saves ~49%, an open-ended one costs ~40% more.
-    # Set to 0 to disable the guard.
-    max_output_tokens_for_translation: int = 4000
+    # Whether translation pays depends on how much shorter the English answer
+    # is, not on how long it is: both the saving and the fee scale with the
+    # answer, so the length cancels out. On Sonnet with a Haiku translator the
+    # English reply must be ~38% shorter to break even.
+    #
+    # A very large max_tokens is nonetheless a useful warning sign, because a
+    # reply that hits the ceiling is pinned to the same length in both
+    # languages, which guarantees zero shrink and a fee charged for nothing.
+    # Set to 0 to disable.
+    max_output_tokens_for_translation: int = 16000
 
     @classmethod
     def resolve(

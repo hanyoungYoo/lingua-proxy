@@ -77,8 +77,9 @@ class Pipeline:
         if model and any(fnmatch(model, pattern) for pattern in self.skip_models):
             return "model"
 
-        # A long reply costs more to translate than the request saves, because
-        # the fee scales with the answer while the saving does not.
+        # A reply large enough to risk hitting the ceiling is pinned to the
+        # same length in both languages, so it cannot shrink and the fee buys
+        # nothing. Length alone is otherwise not the deciding factor.
         if self.max_output_tokens:
             requested = codec.max_output_tokens(body)
             if requested and requested > self.max_output_tokens:

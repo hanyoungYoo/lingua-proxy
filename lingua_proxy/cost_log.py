@@ -98,6 +98,51 @@ def estimate_tokens(text: str) -> int:
     return max(1, round(latin / _CHARS_PER_TOKEN_LATIN + other / _CHARS_PER_TOKEN_OTHER))
 
 
+def break_even_shrink(main: ModelPrice, translator: ModelPrice) -> float:
+    """Minimum shrink for translation to be worth it, as a fraction.
+
+    Let ``N`` be the tokens the expensive model would write in the user's
+    language and ``r`` the fraction of that it writes in English instead.
+
+        saving = main.out * N * (1 - r)
+        fee    = translator.in * r*N  +  translator.out * N
+
+    ``N`` cancels, so the absolute length of the answer is irrelevant; only
+    ``r`` decides profit. Solving ``saving > fee`` gives the threshold below.
+
+    Returns the fraction the answer must shrink by (0.38 means the English
+    reply must be at least 38% shorter). A value of 1.0 or more means no
+    shrink can ever pay -- translating with a model as costly as the main one,
+    for instance.
+    """
+    denominator = main.output_per_mtok + translator.input_per_mtok
+    if denominator <= 0:
+        return 1.0
+    max_ratio = (main.output_per_mtok - translator.output_per_mtok) / denominator
+    if max_ratio <= 0:
+        return 1.0
+    return 1.0 - max_ratio
+
+
+def is_profitable(
+    shrink_ratio: float,
+    main: ModelPrice,
+    translator: ModelPrice,
+    *,
+    native_output: int = 1000,
+) -> bool:
+    """Would translation have been cheaper, given how much the answer shrank?
+
+    ``shrink_ratio`` is English length divided by native length, so 0.3 means
+    the English answer was 30% as long. ``native_output`` is accepted for
+    readability at call sites; it does not affect the outcome.
+    """
+    english = native_output * shrink_ratio
+    saving = main.output_per_mtok * (native_output - english) / 1e6
+    fee = (translator.input_per_mtok * english + translator.output_per_mtok * native_output) / 1e6
+    return saving > fee
+
+
 @dataclass
 class CostRow:
     """One request's accounting."""

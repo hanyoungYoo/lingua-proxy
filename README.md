@@ -104,9 +104,25 @@ by the cheap translation model rather than the expensive one:
 | Expensive model writes | 430 Korean tokens | 102 English tokens |
 | Cheap model writes | — | the Korean you read |
 
-That is the whole trick. It is also why the benefit disappears when the reply is
-long: the translation fee scales with the answer, so a request that generates
-thousands of tokens pays a large fee against a saving that has stopped growing.
+That is the whole trick — and it also sets the condition under which it fails.
+
+Both the saving and the translation fee scale with the length of the answer, so
+**the length cancels out**. What decides profitability is only *how much shorter
+the English answer is*. On a Sonnet-class model with a cheap translator, the
+English reply must come out at least **38% shorter** to break even:
+
+| Main model | English answer must be shorter by |
+| --- | --- |
+| Opus-class | 23% |
+| Sonnet 4.6 | 38% |
+| Sonnet 5 | 55% |
+| Haiku | never pays — you would pay Haiku to rewrite Haiku |
+
+In practice a bounded question clears this comfortably (measured: 521 Korean
+tokens became 178 English, a 66% shrink, 49% cheaper overall). A rambling answer
+often does not (measured: 836 became 693, a 17% shrink, 10% *more* expensive).
+A reply that hits `max_tokens` is the worst case: pinned to the same length in
+both languages, it cannot shrink at all, so the fee buys nothing.
 
 Measured input-token savings, 18 prompts against a real Sonnet-class model:
 
@@ -127,10 +143,11 @@ proxy declines to translate rather than risk mangling a fragment.
 
 Measured end to end on a Sonnet-class model, translation fee included:
 
-| Workload | Result |
-| --- | --- |
-| Question with a bounded answer | **−49%** |
-| Open-ended "explain in detail" | **+40%**, it costs more |
+| Workload | Answer shrank by | Result |
+| --- | --- | --- |
+| Question with a bounded answer | 66% | **49% cheaper** |
+| Rambling answer, finished naturally | 17% | **10% more expensive** |
+| Answer truncated at `max_tokens` | 0% | **44% more expensive** |
 
 | Workload | Verdict |
 | --- | --- |
@@ -141,18 +158,18 @@ Measured end to end on a Sonnet-class model, translation fee included:
 | Very short prompts | No effect, translation is skipped |
 | Quality-critical or legal text | Not recommended at any price |
 
-The single best predictor is **how long the answer is**. Ask for a bounded reply
-and the proxy pays for itself; ask for an essay and the translation fee outruns
-the saving. If your traffic is mostly open-ended generation, this tool is not
-for you, and `lingua-proxy bench` will tell you so against your own workload.
+The single best predictor is **how tightly the answer is scoped**, not how long
+it is. A question with a definite answer compresses well into English. An
+open-ended one produces sprawl in both languages, and sprawl does not compress.
+`lingua-proxy bench` measures this against your own workload.
 
-The proxy defends against this automatically. A request whose `max_tokens`
-exceeds 4000 is passed through untranslated, because past roughly that length
-the fee reliably outruns the benefit. The response carries
-`x-lingua-skipped: long_output` so you can see it happened. Tune or disable it:
+The proxy guards against the worst case automatically: a request whose
+`max_tokens` is large enough to risk truncation is passed through untranslated,
+because a truncated reply cannot shrink and the fee would buy nothing. The
+response carries `x-lingua-skipped: long_output`. Tune or disable it:
 
 ```toml
-max_output_tokens_for_translation = 4000  # 0 disables the guard
+max_output_tokens_for_translation = 16000  # 0 disables the guard
 ```
 
 ### Getting the most out of it
@@ -162,8 +179,8 @@ Korean, anything that shortens its reply increases the benefit:
 
 - **Ask for bounded answers.** "In three sentences" or "as a short list" saves
   far more than the same question asked open-endedly.
-- **Set `max_tokens` deliberately.** A low ceiling both caps spend and keeps the
-  request inside the range where translation pays.
+- **Set `max_tokens` to a real limit, not a huge one.** A ceiling the answer
+  actually hits guarantees zero shrink and a wasted fee.
 - **Send bulk or code-heavy work through `x-lingua-bypass: true`.** Those are
   the cases that lose money.
 
