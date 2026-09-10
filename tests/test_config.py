@@ -171,3 +171,23 @@ def test_no_private_endpoints_committed_in_repo():
             offenders.append(f"{path.relative_to(REPO)}: {host}")
 
     assert not offenders, f"private or unexpected endpoints committed: {offenders}"
+
+
+def test_package_and_module_versions_agree():
+    """A drifting version would ship a package whose CLI reports the wrong number."""
+    import tomllib
+
+    from lingua_proxy import __version__
+
+    with open(REPO / "pyproject.toml", "rb") as fh:
+        packaged = tomllib.load(fh)["project"]["version"]
+
+    assert __version__ == packaged
+
+
+def test_changelog_documents_the_current_version():
+    """The release workflow tags from pyproject; the changelog must keep up."""
+    from lingua_proxy import __version__
+
+    changelog = (REPO / "CHANGELOG.md").read_text()
+    assert f"## [{__version__}]" in changelog, f"CHANGELOG.md has no section for {__version__}"

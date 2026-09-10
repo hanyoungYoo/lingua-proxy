@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-10
+
 ### Added
 
 - Transparency controls for translation errors. A translation can be fluent and
@@ -51,5 +53,6 @@ First release. Alpha: the interfaces may still change.
 - macOS and Linux only.
 - DeepL and LibreTranslate adapters are interface-only.
 
-[Unreleased]: https://github.com/hanyoungYoo/lingua-proxy/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/hanyoungYoo/lingua-proxy/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/hanyoungYoo/lingua-proxy/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/hanyoungYoo/lingua-proxy/releases/tag/v0.1.0
