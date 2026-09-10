@@ -203,6 +203,7 @@ def _get_pipeline(request: Request) -> Pipeline:
         translator=translator,
         memo=app.state.memo,
         skip_models=settings.skip_models,
+        max_output_tokens=settings.max_output_tokens_for_translation,
     )
 
 
@@ -451,8 +452,14 @@ async def handle(request: Request, codec: Codec, upstream_base: str) -> Response
 
     pipeline = _get_pipeline(request)
 
-    if pipeline.should_skip(body, codec, _wants_bypass(request)) is not None:
-        return await relay(request, upstream_base)
+    skipped = pipeline.should_skip(body, codec, _wants_bypass(request))
+    if skipped is not None:
+        # Say so explicitly: a client should be able to tell "not translated"
+        # from "this proxy does not report".
+        response = await relay(request, upstream_base)
+        response.headers.update(_transparency_headers(None))
+        response.headers["x-lingua-skipped"] = skipped
+        return response
 
     source = pipeline.conversation_language(body, codec)
 

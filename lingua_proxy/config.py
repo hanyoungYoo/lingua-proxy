@@ -172,6 +172,13 @@ class Settings:
     # prompt text to disk.
     audit_log_path: pathlib.Path | None = None
 
+    # Translation cost scales with the length of the reply, while the saving
+    # does not. Past a few thousand output tokens the fee outruns the benefit,
+    # so a request that asks for a very long answer is passed through instead.
+    # Measured: a bounded answer saves ~49%, an open-ended one costs ~40% more.
+    # Set to 0 to disable the guard.
+    max_output_tokens_for_translation: int = 4000
+
     @classmethod
     def resolve(
         cls,

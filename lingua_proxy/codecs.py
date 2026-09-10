@@ -96,6 +96,16 @@ class Codec:
     def is_stream(self, body: dict) -> bool:
         return bool(isinstance(body, dict) and body.get("stream"))
 
+    def max_output_tokens(self, body: dict) -> int | None:
+        """The reply ceiling this request asked for, if it named one."""
+        if not isinstance(body, dict):
+            return None
+        for key in ("max_tokens", "max_completion_tokens", "max_output_tokens"):
+            value = body.get(key)
+            if isinstance(value, int) and value > 0:
+                return value
+        return None
+
 
 def _messages(body: dict) -> list[dict]:
     if not isinstance(body, dict):

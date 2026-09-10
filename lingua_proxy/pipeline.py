@@ -58,11 +58,13 @@ class Pipeline:
         translator,
         memo: Memo,
         skip_models: tuple[str, ...] = (),
+        max_output_tokens: int = 0,
     ):
         self.detector = detector
         self.translator = translator
         self.memo = memo
         self.skip_models = skip_models
+        self.max_output_tokens = max_output_tokens
 
     # -- decisions -------------------------------------------------------
 
@@ -70,9 +72,18 @@ class Pipeline:
         """Reasons to forward without looking at the text at all."""
         if bypass:
             return "bypass_header"
+
         model = codec.model(body)
         if model and any(fnmatch(model, pattern) for pattern in self.skip_models):
             return "model"
+
+        # A long reply costs more to translate than the request saves, because
+        # the fee scales with the answer while the saving does not.
+        if self.max_output_tokens:
+            requested = codec.max_output_tokens(body)
+            if requested and requested > self.max_output_tokens:
+                return "long_output"
+
         return None
 
     @staticmethod

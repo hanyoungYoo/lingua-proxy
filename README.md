@@ -88,10 +88,25 @@ Never touched:
 Savings come from the difference in how the same meaning tokenizes across
 languages, minus what the translation itself costs.
 
-**Where the saving actually is.** Translation shrinks your *input* tokens. It
-does not shrink the reply, and output tokens cost roughly five times more per
-token than input. So the headline percentage depends heavily on how much your
-workload reads versus how much it writes.
+**Where the saving actually is.** Both sides, but by different mechanisms.
+
+*Input* is straightforward: your Korean prompt becomes a shorter English one.
+
+*Output* is where most of the money is, and the effect there is larger but
+easier to lose. Asked the same question, a model answering in English emits far
+fewer tokens than one answering in Korean — measured at 115 versus 405 output
+tokens for the same three-sentence explanation, a 72% reduction for content of
+the same length. The proxy still hands you Korean, but the Korean is generated
+by the cheap translation model rather than the expensive one:
+
+| | Without proxy | With proxy |
+| --- | --- | --- |
+| Expensive model writes | 430 Korean tokens | 102 English tokens |
+| Cheap model writes | — | the Korean you read |
+
+That is the whole trick. It is also why the benefit disappears when the reply is
+long: the translation fee scales with the answer, so a request that generates
+thousands of tokens pays a large fee against a saving that has stopped growing.
 
 Measured input-token savings, 18 prompts against a real Sonnet-class model:
 
@@ -110,18 +125,47 @@ away from the measurement.
 Short prompts save nothing at all, by design: below the detection threshold the
 proxy declines to translate rather than risk mangling a fragment.
 
+Measured end to end on a Sonnet-class model, translation fee included:
+
+| Workload | Result |
+| --- | --- |
+| Question with a bounded answer | **−49%** |
+| Open-ended "explain in detail" | **+40%**, it costs more |
+
 | Workload | Verdict |
 | --- | --- |
-| Long non-English prompts, short replies | Pays off most |
+| Non-English prompts with bounded answers | Pays off most |
 | Ordinary non-English chat and Q&A | Pays off |
-| Long-form generation (short prompt, long reply) | Marginal, the reply dominates |
+| Open-ended long-form generation | Usually costs more than it saves |
 | Code-heavy payloads | Can cost more than it saves |
 | Very short prompts | No effect, translation is skipped |
 | Quality-critical or legal text | Not recommended at any price |
 
-Because the reply is the expensive half, an end-to-end dollar figure is lower
-than the input-token figure above. Measure your own traffic rather than trusting
-either number.
+The single best predictor is **how long the answer is**. Ask for a bounded reply
+and the proxy pays for itself; ask for an essay and the translation fee outruns
+the saving. If your traffic is mostly open-ended generation, this tool is not
+for you, and `lingua-proxy bench` will tell you so against your own workload.
+
+The proxy defends against this automatically. A request whose `max_tokens`
+exceeds 4000 is passed through untranslated, because past roughly that length
+the fee reliably outruns the benefit. The response carries
+`x-lingua-skipped: long_output` so you can see it happened. Tune or disable it:
+
+```toml
+max_output_tokens_for_translation = 4000  # 0 disables the guard
+```
+
+### Getting the most out of it
+
+Since the saving comes from the expensive model writing English rather than
+Korean, anything that shortens its reply increases the benefit:
+
+- **Ask for bounded answers.** "In three sentences" or "as a short list" saves
+  far more than the same question asked open-endedly.
+- **Set `max_tokens` deliberately.** A low ceiling both caps spend and keeps the
+  request inside the range where translation pays.
+- **Send bulk or code-heavy work through `x-lingua-bypass: true`.** Those are
+  the cases that lose money.
 
 Run the benchmark yourself, against your own upstream and your own model:
 
