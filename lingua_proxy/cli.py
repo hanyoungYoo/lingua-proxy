@@ -350,11 +350,14 @@ def advise(model: str, as_json: bool) -> None:
             table.add_row(c["translator"], f"{c['required_shrink'] * 100:.0f}%", mark)
     console.print(table)
 
+    # Range observed across the two recorded head-to-head runs; see
+    # tests/fixtures/head_to_head.json.
     console.print(
-        f"\nUse [bold]{best['translator']}[/bold]. A tightly-scoped question typically "
-        f"shrinks about 66% when translated to English, a rambling one about 17%, so "
-        f"a {best['required_shrink'] * 100:.0f}% threshold is cleared by focused "
-        "questions and missed by open-ended ones."
+        f"\nUse [bold]{best['translator']}[/bold]. Measured shrink ranges from about "
+        f"14% on a sprawling answer to 72% on a tightly-scoped one, and a reply that "
+        f"hits max_tokens cannot shrink at all. A {best['required_shrink'] * 100:.0f}% "
+        "threshold is therefore cleared by focused questions and missed by open-ended "
+        "ones. Run 'lingua-proxy bench' to measure your own traffic."
     )
 
 
