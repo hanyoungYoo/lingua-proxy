@@ -220,6 +220,8 @@ keep resent history byte-stable, and never hard-code a private endpoint.
 Security issues should be reported privately. See [SECURITY.md](SECURITY.md),
 which also describes exactly what data this proxy touches.
 
+By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## License
 
 [MIT](LICENSE)
