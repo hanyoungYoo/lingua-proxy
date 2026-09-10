@@ -166,6 +166,45 @@ def test_recorded_short_prompts_show_no_savings():
     assert all(r["input_savings_ratio"] == 0.0 for r in shorts)
 
 
+def _head_to_head() -> dict:
+    return json.loads(pathlib.Path("tests/fixtures/head_to_head.json").read_text())
+
+
+def test_head_to_head_fixture_is_committed():
+    doc = _head_to_head()
+    assert doc["cases"]
+    assert doc["main_model"] and doc["translator_model"]
+
+
+def test_head_to_head_records_that_the_proxy_lost_overall():
+    """The README quotes this. It must stay tied to the measurement."""
+    doc = _head_to_head()
+    assert doc["totals"]["saved_ratio"] < 0
+
+    readme = pathlib.Path("README.md").read_text()
+    figure = f"{abs(doc['totals']['saved_ratio']) * 100:.1f}% more"
+    assert figure in readme, f"README does not quote the measured total ({figure})"
+
+
+def test_break_even_predicts_the_measured_outcomes():
+    """The pricing model should explain the observations, not contradict them."""
+    from lingua_proxy.cost_log import break_even_shrink, price_for
+
+    doc = _head_to_head()
+    threshold = break_even_shrink(price_for(doc["main_model"]), price_for(doc["translator_model"]))
+
+    correct = sum(
+        1 for case in doc["cases"] if (case["shrink"] >= threshold) == (case["saved"] > 0)
+    )
+    assert correct >= len(doc["cases"]) - 1, "the cost model does not explain the data"
+
+
+def test_head_to_head_contains_no_endpoint_or_prompt_text():
+    raw = pathlib.Path("tests/fixtures/head_to_head.json").read_text()
+    assert "http" not in raw
+    assert "Bearer" not in raw
+
+
 def test_readme_quotes_the_recorded_overall_figure():
     """Stops the documented number from drifting away from the measurement."""
     doc = _recorded()

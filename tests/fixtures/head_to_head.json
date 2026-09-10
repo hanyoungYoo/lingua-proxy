@@ -1,0 +1,69 @@
+{
+  "measured_on": "2026-09-10",
+  "main_model": "claude-sonnet-4-6",
+  "translator_model": "claude-haiku-4-5",
+  "method": "Head-to-head. Path A: non-English prompt straight to the model, answer in the same language. Path B: prompt translated to English, model answers in English, answer translated back. Every token on both paths is counted, including the translator's own calls.",
+  "headline": "Across six prompts the proxy cost 6.9% MORE than not using it. Only Korean bounded questions won clearly. The break-even model (English reply must be >=38% shorter on this model pair) predicted 5 of 6 outcomes correctly.",
+  "cases": [
+    {
+      "id": "bounded-ko",
+      "lang": "ko",
+      "scope": "bounded",
+      "native_output": 543,
+      "proxied_output": 110,
+      "shrink": 0.8,
+      "saved": 0.69
+    },
+    {
+      "id": "bounded-ja",
+      "lang": "ja",
+      "scope": "bounded",
+      "native_output": 35,
+      "proxied_output": 26,
+      "shrink": 0.26,
+      "saved": -0.12
+    },
+    {
+      "id": "bounded-zh",
+      "lang": "zh",
+      "scope": "bounded",
+      "native_output": 202,
+      "proxied_output": 218,
+      "shrink": -0.08,
+      "saved": -0.08
+    },
+    {
+      "id": "open-ko",
+      "lang": "ko",
+      "scope": "open",
+      "native_output": 3000,
+      "proxied_output": 2001,
+      "shrink": 0.33,
+      "saved": 0.06
+    },
+    {
+      "id": "open-ja",
+      "lang": "ja",
+      "scope": "open",
+      "native_output": 3000,
+      "proxied_output": 3000,
+      "shrink": 0.0,
+      "saved": -0.4
+    },
+    {
+      "id": "open-zh",
+      "lang": "zh",
+      "scope": "open",
+      "native_output": 3000,
+      "proxied_output": 3000,
+      "shrink": 0.0,
+      "saved": 0.0
+    }
+  ],
+  "totals": {
+    "native_cost_usd": 0.147249,
+    "proxied_cost_usd": 0.157481,
+    "saved_ratio": -0.069
+  },
+  "caveat": "Four of six replies hit max_tokens. A truncated reply is pinned to the same length in both languages, so it cannot shrink and the fee buys nothing. Real savings depend on answers finishing naturally."
+}

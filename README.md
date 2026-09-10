@@ -12,9 +12,11 @@ Korean, Japanese, Chinese, Arabic and other non-Latin scripts tokenize two to
 four times more expensively than English. lingua-proxy pays a small translation
 fee on a cheap model to avoid that penalty on an expensive one.
 
-> **Status: v0.1, alpha.** Read the [Honest cost model](#honest-cost-model) and
-> [Caveats](#caveats) before pointing real traffic at it. It does not pay off
-> for every workload, and this README says exactly when it does not.
+> **Status: v0.1, alpha, and it does not pay off for everyone.** In a
+> head-to-head measurement across six prompts it cost **6.9% more** overall than
+> not using it. Korean bounded questions saved 69%; Japanese and Chinese mostly
+> lost. Read the [Honest cost model](#honest-cost-model) first, and run
+> `lingua-proxy bench` against your own traffic before adopting it.
 
 ## Quickstart
 
@@ -118,13 +120,14 @@ English reply must come out at least **38% shorter** to break even:
 | Sonnet 5 | 55% |
 | Haiku | never pays — you would pay Haiku to rewrite Haiku |
 
-In practice a bounded question clears this comfortably (measured: 521 Korean
-tokens became 178 English, a 66% shrink, 49% cheaper overall). A rambling answer
-often does not (measured: 836 became 693, a 17% shrink, 10% *more* expensive).
+Whether your traffic clears that bar is an empirical question, and the answer is
+often no. See the head-to-head measurements below before assuming it does.
 A reply that hits `max_tokens` is the worst case: pinned to the same length in
 both languages, it cannot shrink at all, so the fee buys nothing.
 
-Measured input-token savings, 18 prompts against a real Sonnet-class model:
+Measured input-token savings, 18 prompts against a real Sonnet-class model.
+These are real but they are only half the ledger: the input side always wins,
+and the output side decides whether the request as a whole does.
 
 | Language | Input tokens saved |
 | --- | --- |
@@ -141,27 +144,48 @@ away from the measurement.
 Short prompts save nothing at all, by design: below the detection threshold the
 proxy declines to translate rather than risk mangling a fragment.
 
-Measured end to end on a Sonnet-class model, translation fee included:
+### Measured head to head
 
-| Workload | Answer shrank by | Result |
+Six prompts, each sent twice: once straight to the model in its original
+language, once through the proxy. Every token on both paths counted, including
+the translator's own calls. Sonnet 4.6 with a Haiku translator:
+
+| Prompt | Answer shrank by | Result |
 | --- | --- | --- |
-| Question with a bounded answer | 66% | **49% cheaper** |
-| Rambling answer, finished naturally | 17% | **10% more expensive** |
-| Answer truncated at `max_tokens` | 0% | **44% more expensive** |
+| Korean, bounded | 80% | **69% cheaper** |
+| Korean, open-ended | 33% | 6% cheaper |
+| Chinese, open-ended | 0% | no change |
+| Chinese, bounded | −8% | 8% more expensive |
+| Japanese, bounded | 26% | 12% more expensive |
+| Japanese, open-ended | 0% | 40% more expensive |
+| **Total** | | **6.9% more expensive** |
+
+Read that total carefully: **on this sample the proxy cost more than it saved.**
+One case won decisively and carried nothing else with it.
+
+That is what the break-even rule predicts, and it called five of the six
+outcomes correctly in advance. Korean compresses into English dramatically.
+Japanese and Chinese are already compact — one Chinese answer came out *longer*
+in English — so they rarely clear the 38% threshold this model pair needs.
+
+Raw numbers are in `tests/fixtures/head_to_head.json`. Four of the six replies
+hit `max_tokens`, which pins both languages to the same length and guarantees
+zero shrink, so treat the open-ended rows as a floor rather than a verdict.
 
 | Workload | Verdict |
 | --- | --- |
-| Non-English prompts with bounded answers | Pays off most |
-| Ordinary non-English chat and Q&A | Pays off |
-| Open-ended long-form generation | Usually costs more than it saves |
+| Korean, bounded questions | Pays off, sometimes dramatically |
+| Korean, open-ended | Roughly break-even |
+| Japanese or Chinese | Usually costs more than it saves |
+| Arabic | Compresses well on input; measure your own output |
 | Code-heavy payloads | Can cost more than it saves |
 | Very short prompts | No effect, translation is skipped |
 | Quality-critical or legal text | Not recommended at any price |
 
-The single best predictor is **how tightly the answer is scoped**, not how long
-it is. A question with a definite answer compresses well into English. An
-open-ended one produces sprawl in both languages, and sprawl does not compress.
-`lingua-proxy bench` measures this against your own workload.
+Two things predict the outcome: **your language**, and **how tightly the answer
+is scoped**. Do not adopt this on the strength of the Korean row. Run
+`lingua-proxy bench` against your own traffic, and be willing to conclude it is
+not for you.
 
 The proxy guards against the worst case automatically: a request whose
 `max_tokens` is large enough to risk truncation is passed through untranslated,
@@ -171,6 +195,23 @@ response carries `x-lingua-skipped: long_output`. Tune or disable it:
 ```toml
 max_output_tokens_for_translation = 16000  # 0 disables the guard
 ```
+
+### Which translator should I use?
+
+Ask, rather than sweeping models at real cost:
+
+```bash
+lingua-proxy advise --model claude-sonnet-4-6
+```
+
+It computes the break-even threshold for every translator that shares your
+upstream and recommends one. The answer is arithmetic, not an experiment: the
+cheapest capable model always wins, because the fee is what eats the saving.
+The bundled default is already that model.
+
+The translator is the only setting that moves the economics. Detection is
+offline and free, and translation runs at temperature 0 with no reasoning
+enabled, so there is no effort or sampling knob to tune.
 
 ### Getting the most out of it
 

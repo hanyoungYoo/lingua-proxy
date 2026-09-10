@@ -287,6 +287,77 @@ def dashboard(as_json: bool) -> None:
         console.print(langs)
 
 
+# -- advise -------------------------------------------------------------
+
+
+@main.command()
+@click.option("--model", required=True, help="The model your requests actually use.")
+@click.option("--json", "as_json", is_flag=True, help="Machine-readable output.")
+def advise(model: str, as_json: bool) -> None:
+    """Say whether translation can pay off for a given model, and with what.
+
+    Both the saving and the translation fee scale with the length of the
+    answer, so the answer's length cancels out: what matters is how much
+    shorter the English reply is. That threshold is arithmetic, so it can be
+    computed rather than discovered by spending money on a sweep.
+    """
+    from lingua_proxy.cost_log import PRICES, break_even_shrink, price_for
+
+    main_price = price_for(model)
+
+    # Only translators reachable through the same upstream are useful here.
+    # A cheaper model behind a different vendor's API is not a drop-in.
+    family = "claude-" if model.startswith("claude-") else ""
+    names = [n for n in sorted(PRICES) if n.startswith(family)] or sorted(PRICES)
+
+    candidates = []
+    for name in names:
+        threshold = break_even_shrink(main_price, price_for(name))
+        candidates.append(
+            {
+                "translator": name,
+                "required_shrink": round(threshold, 4),
+                "viable": threshold < 1.0,
+            }
+        )
+
+    viable = [c for c in candidates if c["viable"]]
+    best = min(viable, key=lambda c: c["required_shrink"]) if viable else None
+
+    if as_json:
+        click.echo(
+            json.dumps({"model": model, "recommended": best, "candidates": candidates}, indent=2)
+        )
+        raise SystemExit(0 if best else 1)
+
+    if best is None:
+        console.print(
+            f"[red]Translation is not worth it for {model}.[/red]\n"
+            "Every available translator costs as much per output token as the model "
+            "itself, so you would pay to rewrite an answer you already paid for."
+        )
+        raise SystemExit(1)
+
+    table = Table(title=f"Translator options for {model}")
+    table.add_column("Translator")
+    table.add_column("English reply must be shorter by", justify="right")
+    table.add_column("")
+    for c in candidates:
+        if not c["viable"]:
+            table.add_row(c["translator"], "never pays", "[dim]—[/dim]")
+        else:
+            mark = "[green]recommended[/green]" if c is best else ""
+            table.add_row(c["translator"], f"{c['required_shrink'] * 100:.0f}%", mark)
+    console.print(table)
+
+    console.print(
+        f"\nUse [bold]{best['translator']}[/bold]. A tightly-scoped question typically "
+        f"shrinks about 66% when translated to English, a rambling one about 17%, so "
+        f"a {best['required_shrink'] * 100:.0f}% threshold is cleared by focused "
+        "questions and missed by open-ended ones."
+    )
+
+
 # -- bench --------------------------------------------------------------
 
 
