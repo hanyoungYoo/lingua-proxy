@@ -1,0 +1,21 @@
+{"id": "chat-ko-1", "lang": "ko", "category": "chat", "prompt": "파이썬에서 리스트와 튜플의 차이가 뭔지 설명해 주고, 각각 어떤 상황에서 쓰는 게 좋은지 예시와 함께 알려줘."}
+{"id": "chat-ko-2", "lang": "ko", "category": "chat", "prompt": "우리 서비스 응답 속도가 최근에 느려졌는데, 원인을 찾으려면 어떤 지표부터 확인해야 할까? 순서대로 알려줘."}
+{"id": "chat-ko-3", "lang": "ko", "category": "chat", "prompt": "데이터베이스 인덱스를 추가하면 항상 빨라지는 건 아니라고 들었어. 어떤 경우에 오히려 느려지는지 설명해 줘."}
+{"id": "chat-ja-1", "lang": "ja", "category": "chat", "prompt": "非同期処理と並行処理の違いを、実際のコード例を交えながら初心者にも分かるように説明してください。"}
+{"id": "chat-ja-2", "lang": "ja", "category": "chat", "prompt": "チームでコードレビューを導入したいのですが、最初に決めておくべきルールを優先度順に教えてください。"}
+{"id": "chat-ja-3", "lang": "ja", "category": "chat", "prompt": "本番環境で発生した障害の原因調査を行う際、ログのどこから見ていくのが効率的でしょうか。"}
+{"id": "chat-zh-1", "lang": "zh", "category": "chat", "prompt": "请解释一下什么是数据库事务的隔离级别，以及在实际项目中应该如何选择合适的级别。"}
+{"id": "chat-zh-2", "lang": "zh", "category": "chat", "prompt": "我们的接口偶尔会超时，但重试之后就正常了。请分析可能的原因并给出排查思路。"}
+{"id": "chat-zh-3", "lang": "zh", "category": "chat", "prompt": "微服务架构相比单体架构有哪些代价？请从团队规模和运维成本的角度说明。"}
+{"id": "chat-ar-1", "lang": "ar", "category": "chat", "prompt": "اشرح لي الفرق بين التخزين المؤقت على مستوى التطبيق والتخزين المؤقت على مستوى قاعدة البيانات، ومتى أستخدم كل منهما."}
+{"id": "chat-ar-2", "lang": "ar", "category": "chat", "prompt": "ما هي أفضل الممارسات لتأمين واجهة برمجة التطبيقات العامة؟ اذكرها مرتبة حسب الأهمية."}
+{"id": "chat-ar-3", "lang": "ar", "category": "chat", "prompt": "أواجه بطئاً في تحميل الصفحة الرئيسية لموقعي. ما الخطوات التي يجب أن أتبعها لتشخيص المشكلة؟"}
+{"id": "short-ko-1", "lang": "ko", "category": "short", "prompt": "이거 고쳐줘"}
+{"id": "short-ja-1", "lang": "ja", "category": "short", "prompt": "これを直して"}
+{"id": "short-zh-1", "lang": "zh", "category": "short", "prompt": "帮我修一下"}
+{"id": "long-ko-1", "lang": "ko", "category": "long_form", "prompt": "우리 팀이 새로 도입할 코드 리뷰 프로세스에 대한 문서를 작성해 줘. 배경, 목표, 단계별 절차, 예외 상황 처리, 그리고 도입 후 3개월 시점에 점검할 지표까지 포함해서 자세히 써 줘."}
+{"id": "long-ja-1", "lang": "ja", "category": "long_form", "prompt": "新しいメンバー向けのオンボーディング資料を作成してください。開発環境の構築手順、コードベースの全体像、レビュー文化、よくあるつまずきポイントとその対処法を含めて、詳しく書いてください。"}
+{"id": "long-zh-1", "lang": "zh", "category": "long_form", "prompt": "请为我们的服务撰写一份完整的故障应急预案文档，包括故障分级标准、各级别的响应流程、责任人分工、对外沟通模板，以及事后复盘的具体步骤。"}
+{"id": "code-ko-1", "lang": "ko", "category": "code_heavy", "prompt": "이 함수 성능을 개선해줘:\n\n```python\ndef process_records(records, threshold):\n    results = []\n    seen = set()\n    for record in records:\n        key = record.get(\"id\")\n        if key in seen:\n            continue\n        seen.add(key)\n        score = 0\n        for field in (\"alpha\", \"beta\", \"gamma\"):\n            value = record.get(field)\n            if value is None:\n                continue\n            score += value * WEIGHTS[field]\n        if score > threshold:\n            results.append({\"id\": key, \"score\": score})\n    results.sort(key=lambda item: item[\"score\"], reverse=True)\n    return results\n```"}
+{"id": "code-ja-1", "lang": "ja", "category": "code_heavy", "prompt": "この関数のバグを見つけてください:\n\n```javascript\nexport function buildIndex(documents) {\n  const index = new Map();\n  for (const doc of documents) {\n    const tokens = doc.text.toLowerCase().split(/\\W+/);\n    for (const token of tokens) {\n      if (!token) continue;\n      if (!index.has(token)) index.set(token, new Set());\n      index.get(token).add(doc.id);\n    }\n  }\n  return index;\n}\n```"}
+{"id": "code-zh-1", "lang": "zh", "category": "code_heavy", "prompt": "请帮我优化这个查询:\n\n```sql\nSELECT u.id, u.email, COUNT(o.id) AS order_count, SUM(o.total) AS lifetime_value\nFROM users u\nLEFT JOIN orders o ON o.user_id = u.id AND o.status = 'completed'\nWHERE u.created_at >= NOW() - INTERVAL '90 days'\nGROUP BY u.id, u.email\nHAVING COUNT(o.id) > 3\nORDER BY lifetime_value DESC\nLIMIT 100;\n```"}

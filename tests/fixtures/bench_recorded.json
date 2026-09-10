@@ -1,0 +1,184 @@
+{
+  "measured_on": "2026-09-10",
+  "model_class": "sonnet-class",
+  "translator_model": "claude-haiku-4-5",
+  "method": "Each prompt sent twice through the proxy: once with x-lingua-bypass (native language) and once translated. Input tokens compared. Output tokens are excluded because reply length varies independently and truncation at max_tokens pins both runs to the same count.",
+  "caveat": "Input-token savings only. Output tokens cost ~5x more per token and are not reduced by translation, so end-to-end dollar savings are lower.",
+  "totals": {
+    "native_input_tokens": 1040,
+    "proxied_input_tokens": 576,
+    "input_savings_ratio": 0.4462
+  },
+  "by_language": {
+    "ko": {
+      "n": 5,
+      "native": 356,
+      "proxied": 172,
+      "input_savings_ratio": 0.5169
+    },
+    "ja": {
+      "n": 5,
+      "native": 242,
+      "proxied": 164,
+      "input_savings_ratio": 0.3223
+    },
+    "zh": {
+      "n": 5,
+      "native": 230,
+      "proxied": 153,
+      "input_savings_ratio": 0.3348
+    },
+    "ar": {
+      "n": 3,
+      "native": 212,
+      "proxied": 87,
+      "input_savings_ratio": 0.5896
+    }
+  },
+  "prompts": [
+    {
+      "id": "chat-ko-1",
+      "lang": "ko",
+      "category": "chat",
+      "native_input_tokens": 78,
+      "proxied_input_tokens": 35,
+      "input_savings_ratio": 0.5513
+    },
+    {
+      "id": "chat-ko-2",
+      "lang": "ko",
+      "category": "chat",
+      "native_input_tokens": 72,
+      "proxied_input_tokens": 33,
+      "input_savings_ratio": 0.5417
+    },
+    {
+      "id": "chat-ko-3",
+      "lang": "ko",
+      "category": "chat",
+      "native_input_tokens": 72,
+      "proxied_input_tokens": 32,
+      "input_savings_ratio": 0.5556
+    },
+    {
+      "id": "chat-ja-1",
+      "lang": "ja",
+      "category": "chat",
+      "native_input_tokens": 48,
+      "proxied_input_tokens": 33,
+      "input_savings_ratio": 0.3125
+    },
+    {
+      "id": "chat-ja-2",
+      "lang": "ja",
+      "category": "chat",
+      "native_input_tokens": 46,
+      "proxied_input_tokens": 34,
+      "input_savings_ratio": 0.2609
+    },
+    {
+      "id": "chat-ja-3",
+      "lang": "ja",
+      "category": "chat",
+      "native_input_tokens": 49,
+      "proxied_input_tokens": 35,
+      "input_savings_ratio": 0.2857
+    },
+    {
+      "id": "chat-zh-1",
+      "lang": "zh",
+      "category": "chat",
+      "native_input_tokens": 48,
+      "proxied_input_tokens": 26,
+      "input_savings_ratio": 0.4583
+    },
+    {
+      "id": "chat-zh-2",
+      "lang": "zh",
+      "category": "chat",
+      "native_input_tokens": 47,
+      "proxied_input_tokens": 34,
+      "input_savings_ratio": 0.2766
+    },
+    {
+      "id": "chat-zh-3",
+      "lang": "zh",
+      "category": "chat",
+      "native_input_tokens": 43,
+      "proxied_input_tokens": 33,
+      "input_savings_ratio": 0.2326
+    },
+    {
+      "id": "chat-ar-1",
+      "lang": "ar",
+      "category": "chat",
+      "native_input_tokens": 78,
+      "proxied_input_tokens": 33,
+      "input_savings_ratio": 0.5769
+    },
+    {
+      "id": "chat-ar-2",
+      "lang": "ar",
+      "category": "chat",
+      "native_input_tokens": 64,
+      "proxied_input_tokens": 25,
+      "input_savings_ratio": 0.6094
+    },
+    {
+      "id": "chat-ar-3",
+      "lang": "ar",
+      "category": "chat",
+      "native_input_tokens": 70,
+      "proxied_input_tokens": 29,
+      "input_savings_ratio": 0.5857
+    },
+    {
+      "id": "short-ko-1",
+      "lang": "ko",
+      "category": "short",
+      "native_input_tokens": 17,
+      "proxied_input_tokens": 17,
+      "input_savings_ratio": 0.0
+    },
+    {
+      "id": "short-ja-1",
+      "lang": "ja",
+      "category": "short",
+      "native_input_tokens": 11,
+      "proxied_input_tokens": 11,
+      "input_savings_ratio": 0.0
+    },
+    {
+      "id": "short-zh-1",
+      "lang": "zh",
+      "category": "short",
+      "native_input_tokens": 14,
+      "proxied_input_tokens": 14,
+      "input_savings_ratio": 0.0
+    },
+    {
+      "id": "long-ko-1",
+      "lang": "ko",
+      "category": "long_form",
+      "native_input_tokens": 117,
+      "proxied_input_tokens": 55,
+      "input_savings_ratio": 0.5299
+    },
+    {
+      "id": "long-ja-1",
+      "lang": "ja",
+      "category": "long_form",
+      "native_input_tokens": 88,
+      "proxied_input_tokens": 51,
+      "input_savings_ratio": 0.4205
+    },
+    {
+      "id": "long-zh-1",
+      "lang": "zh",
+      "category": "long_form",
+      "native_input_tokens": 78,
+      "proxied_input_tokens": 46,
+      "input_savings_ratio": 0.4103
+    }
+  ]
+}

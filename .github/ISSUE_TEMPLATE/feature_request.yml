@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Please describe the situation rather than only the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like it to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: cost
+    attributes:
+      label: Does this affect the cost tradeoff?
+      description: >
+        This project exists to reduce token spend. If your idea changes what a
+        request costs, please say how.

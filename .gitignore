@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# never commit local runtime state or private endpoints
+.lingua-proxy/
+*.local.toml
+*.local.json
+tests/fixtures/*.local.json
