@@ -23,12 +23,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
-- **Corrected the headline claim.** A head-to-head measurement (six prompts,
-  each sent both natively and through the proxy, every token counted) found the
-  proxy cost 6.9% MORE overall. Korean bounded questions saved 69%; Japanese and
-  Chinese mostly lost, and one Chinese answer was longer in English than in
-  Chinese. The README now leads with this instead of an input-token figure that
-  told only half the story.
+- **Corrected the headline claim.** A head-to-head measurement (each prompt sent
+  both natively and through the proxy, every token counted) found a mixed sample
+  cost 6.9% MORE overall. A second run isolated the cause: replies that hit
+  `max_tokens` are pinned to the same length in both languages, so they cannot
+  shrink and the fee buys nothing. With bounded questions and no truncation,
+  four of six saved money and Japanese went from losing to saving 31%. The
+  deciding factor is the shape of the answer, not the language. The README now
+  leads with this instead of an input-token figure that told half the story.
 - `advise` command reports which translator can pay off for a given model, and
   says plainly when none can.
 

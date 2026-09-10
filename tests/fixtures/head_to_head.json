@@ -65,5 +65,17 @@
     "proxied_cost_usd": 0.157481,
     "saved_ratio": -0.069
   },
-  "caveat": "Four of six replies hit max_tokens. A truncated reply is pinned to the same length in both languages, so it cannot shrink and the fee buys nothing. Real savings depend on answers finishing naturally."
+  "caveat": "Four of six replies hit max_tokens. A truncated reply is pinned to the same length in both languages, so it cannot shrink and the fee buys nothing. Real savings depend on answers finishing naturally.",
+  "followup_bounded_untruncated": {
+    "note": "Second run correcting two flaws in the first: prompts that ask for a bounded answer, and a ceiling high enough that nothing truncates. Four of six saved money, versus one of six before. The earlier -6.9% total was driven by truncation and open-ended prompts, not by language. Japanese in particular went from losing to saving 31% once its answer was allowed to finish.",
+    "break_even_predicted": "5 of 6",
+    "cases": [
+      { "id": "ko-1", "lang": "ko", "shrink": 0.72, "saved": 0.58 },
+      { "id": "ko-2", "lang": "ko", "shrink": 0.47, "saved": 0.22 },
+      { "id": "ja-1", "lang": "ja", "shrink": 0.54, "saved": 0.31 },
+      { "id": "ja-2", "lang": "ja", "shrink": 0.25, "saved": -0.09 },
+      { "id": "zh-1", "lang": "zh", "shrink": 0.14, "saved": 0.14 },
+      { "id": "zh-2", "lang": "zh", "shrink": 0.22, "saved": -0.09 }
+    ]
+  }
 }

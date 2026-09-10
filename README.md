@@ -12,11 +12,11 @@ Korean, Japanese, Chinese, Arabic and other non-Latin scripts tokenize two to
 four times more expensively than English. lingua-proxy pays a small translation
 fee on a cheap model to avoid that penalty on an expensive one.
 
-> **Status: v0.1, alpha, and it does not pay off for everyone.** In a
-> head-to-head measurement across six prompts it cost **6.9% more** overall than
-> not using it. Korean bounded questions saved 69%; Japanese and Chinese mostly
-> lost. Read the [Honest cost model](#honest-cost-model) first, and run
-> `lingua-proxy bench` against your own traffic before adopting it.
+> **Status: v0.1, alpha, and it does not pay off for every workload.** Measured
+> head to head, focused questions saved 22–58% while sprawling ones lost money,
+> and a deliberately mixed sample came out **6.9% more expensive** overall. Read
+> the [Honest cost model](#honest-cost-model) first, and run `lingua-proxy bench`
+> against your own traffic before adopting it.
 
 ## Quickstart
 
@@ -161,29 +161,40 @@ the translator's own calls. Sonnet 4.6 with a Haiku translator:
 | **Total** | | **6.9% more expensive** |
 
 Read that total carefully: **on this sample the proxy cost more than it saved.**
-One case won decisively and carried nothing else with it.
 
-That is what the break-even rule predicts, and it called five of the six
-outcomes correctly in advance. Korean compresses into English dramatically.
-Japanese and Chinese are already compact — one Chinese answer came out *longer*
-in English — so they rarely clear the 38% threshold this model pair needs.
+But that sample was unkind in a specific way, and a second run isolates why.
+Four of those six replies hit `max_tokens`. A truncated reply is pinned to the
+same length in both languages, so it cannot shrink and the fee buys nothing.
+Repeating the comparison with bounded questions and a ceiling nothing reached:
 
-Raw numbers are in `tests/fixtures/head_to_head.json`. Four of the six replies
-hit `max_tokens`, which pins both languages to the same length and guarantees
-zero shrink, so treat the open-ended rows as a floor rather than a verdict.
+| Prompt | Answer shrank by | Result |
+| --- | --- | --- |
+| Korean | 72% | 58% cheaper |
+| Japanese | 54% | 31% cheaper |
+| Korean | 47% | 22% cheaper |
+| Chinese | 14% | 14% cheaper |
+| Japanese | 25% | 9% more expensive |
+| Chinese | 22% | 9% more expensive |
+
+Four of six saved, against one of six before. Japanese went from losing to
+saving 31% once its answer was allowed to finish. So the deciding factor is not
+which language you write in — it is **whether the answer is short enough to
+compress and long enough to matter**. The break-even rule called five of six in
+both runs.
+
+Raw numbers for both runs are in `tests/fixtures/head_to_head.json`.
 
 | Workload | Verdict |
 | --- | --- |
-| Korean, bounded questions | Pays off, sometimes dramatically |
-| Korean, open-ended | Roughly break-even |
-| Japanese or Chinese | Usually costs more than it saves |
-| Arabic | Compresses well on input; measure your own output |
+| Bounded questions, any non-Latin language | Usually pays off |
+| Replies that hit `max_tokens` | Always loses; nothing can shrink |
+| Open-ended "tell me everything" | Usually loses |
 | Code-heavy payloads | Can cost more than it saves |
 | Very short prompts | No effect, translation is skipped |
 | Quality-critical or legal text | Not recommended at any price |
 
-Two things predict the outcome: **your language**, and **how tightly the answer
-is scoped**. Do not adopt this on the strength of the Korean row. Run
+The honest summary: this saves real money on focused questions and loses money
+on sprawling ones, and the split is roughly even across a naive prompt mix. Run
 `lingua-proxy bench` against your own traffic, and be willing to conclude it is
 not for you.
 
