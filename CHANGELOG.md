@@ -16,7 +16,11 @@ All notable changes to this project are documented here. The format follows
   returns and the reply carries 458 characters against the native answer's 354,
   still using 36% fewer output tokens. It costs about half the saving (36%
   instead of 67%), which is why it is opt-out rather than opt-in: silently
-  returning a thinner answer is not a trade a user agreed to.
+  returning a thinner answer is not a trade a user agreed to. The instruction
+  asks the model to mirror the structure the question implies, which matched the
+  native answer's shape on 2 of 3 sampled prompts against 1 of 3 for a vaguer
+  wording. Exact matching is not the target: the model's own formatting varies
+  by language for the same question.
 
 ### Changed
 

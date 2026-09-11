@@ -131,3 +131,26 @@ async def test_hint_can_be_disabled_per_request():
     )
 
     assert "system" not in transport.json_bodies[0]
+
+
+async def test_instruction_asks_for_structure_matching_the_question():
+    """A question asking for three points should come back as three items.
+
+    The first version of this instruction said only "keep your usual
+    formatting", which produced bullets where the native answer used a
+    numbered list. Naming the mirroring rule explicitly fixed 2 of 3 sampled
+    prompts against 1 of 3.
+    """
+    from lingua_proxy.proxy import STYLE_INSTRUCTION
+
+    lowered = STYLE_INSTRUCTION.lower()
+    assert "numbered" in lowered
+    assert "original language" in lowered
+
+
+async def test_instruction_still_forbids_flattening_and_shortening():
+    from lingua_proxy.proxy import STYLE_INSTRUCTION
+
+    lowered = STYLE_INSTRUCTION.lower()
+    assert "not flatten" in lowered
+    assert "not shorten" in lowered

@@ -148,6 +148,32 @@
       }
     },
     "finding": "The instruction restores the heading and delivers 458 chars, MORE than the native answer's 354, while still using 36% fewer output tokens. Bullets replaced the numbered list, so the shape is close but not identical.",
-    "cost": "Savings drop from 67% to 36% of native output tokens. That is the price of not silently flattening the answer, and it is on by default because quietly degrading output is not a trade users opted into."
+    "cost": "Savings drop from 67% to 36% of native output tokens. That is the price of not silently flattening the answer, and it is on by default because quietly degrading output is not a trade users opted into.",
+    "instruction_tuning": {
+      "question": "Can the instruction be sharpened to also restore numbered lists?",
+      "shape_key": "H=heading N=numbered-list B=bullets",
+      "samples": [
+        {
+          "prompt": "ko-list",
+          "native": "HN-",
+          "first_version": "H-B",
+          "current": "-N-"
+        },
+        {
+          "prompt": "ko-steps",
+          "native": "H-B",
+          "first_version": "H-B",
+          "current": "H-B"
+        },
+        {
+          "prompt": "ja-list",
+          "native": "-N-",
+          "first_version": "H-B",
+          "current": "-N-"
+        }
+      ],
+      "finding": "Naming the mirroring rule ('if it asks for N points, use a numbered list') matched the native shape on 2 of 3 prompts against 1 of 3 for the first version, and used fewer tokens doing it.",
+      "limit": "Exact shape matching is not achievable and is the wrong target: the native answer is itself inconsistent, using a heading for the Korean list question and none for the same question in Japanese. The goal is a structured answer, not a byte-identical one."
+    }
   }
 }

@@ -241,6 +241,14 @@ translator:
 With it on you get **more content than the native answer** (458 characters
 versus 354) for **36% fewer output tokens**.
 
+The instruction asks the model to mirror the structure the question implies, so
+a question asking for three points comes back as three numbered items. Across a
+three-prompt sample it matched the native shape twice; the earlier, vaguer
+wording matched once. Exact matching is not the goal and is not achievable —
+the model's own formatting varies by language, using a heading for a Korean
+list question and none for the same question in Japanese. The aim is a
+structured answer, not a byte-identical one.
+
 It costs about half the saving: 36% instead of 67%. That is the price of not
 silently degrading your output, which is why it is **on by default** — quietly
 returning a thinner answer is not a trade anyone opted into. Turn it off if you

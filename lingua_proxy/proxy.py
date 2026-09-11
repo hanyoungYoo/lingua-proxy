@@ -157,10 +157,12 @@ _FALSE_VALUES = frozenset({"false", "0", "no"})
 #: markdown faithfully; the loss happens because a model answering in English
 #: formats differently than one answering in Korean.
 STYLE_INSTRUCTION = (
-    "Format your answer as you normally would for this question: keep headings, "
-    "numbered or bulleted lists, tables, code blocks, and concrete examples. Do "
-    "not flatten structured content into plain paragraphs, and do not shorten "
-    "your answer."
+    "Format your answer exactly as you would if the question had been asked in "
+    "its original language. Mirror the structure the question implies: if it "
+    "asks for N points or for steps, use a numbered list. Keep headings, "
+    "bulleted lists, tables, code blocks and concrete examples where you would "
+    "normally use them. Do not flatten structured content into plain "
+    "paragraphs, and do not shorten your answer."
 )
 
 
