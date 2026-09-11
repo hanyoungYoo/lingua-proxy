@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lingua-proxy"
-version = "0.1.1"
+version = "0.1.2"
 description = "Local reverse proxy that translates non-English LLM traffic to English to cut token costs"
 readme = "README.md"
 requires-python = ">=3.12"

@@ -212,3 +212,21 @@ def test_readme_quotes_the_recorded_overall_figure():
     readme = pathlib.Path("README.md").read_text()
 
     assert figure in readme, f"README does not quote the measured figure {figure}"
+
+
+def test_summarization_control_is_recorded():
+    """The compression claim must be traceable to a controlled measurement."""
+    doc = _head_to_head()
+    control = doc["summarization_control"]
+
+    # English delivered more text using fewer tokens: compression, not summary.
+    assert control["english"]["chars"] > control["korean"]["chars"]
+    assert control["english"]["output_tokens"] < control["korean"]["output_tokens"]
+
+
+def test_readme_admits_the_content_loss():
+    """The flattening cost is real and must not be quietly dropped."""
+    readme = pathlib.Path("README.md").read_text()
+
+    assert "summarization in disguise" in readme.lower()
+    assert "flatter" in readme.lower()

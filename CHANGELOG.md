@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Documented what the savings cost in answer quality. A controlled test (same
+  question, same explicit format, two languages) confirms the compression is
+  real: English delivered 43% more text using 65% fewer tokens, which
+  summarization cannot do. But an uncontrolled comparison showed the
+  round-tripped answer losing a concrete example and all markdown structure,
+  arriving 37% shorter with every substantive fact intact. Both findings are
+  now in the README and recorded in the fixture.
+
+## [0.1.2] - 2026-09-11
+
+> **Upgrading from 0.1.1:** one default changed. Requests whose `max_tokens`
+> exceeds 16000 are now passed through untranslated, because a reply that hits
+> the ceiling is pinned to the same length in both languages and cannot shrink,
+> so the translation fee buys nothing. Set
+> `max_output_tokens_for_translation = 0` to restore the previous behaviour.
+
 ### Added
 
 - `break_even_shrink()` and `is_profitable()`, which answer whether translation
@@ -91,6 +109,7 @@ First release. Alpha: the interfaces may still change.
 - macOS and Linux only.
 - DeepL and LibreTranslate adapters are interface-only.
 
-[Unreleased]: https://github.com/hanyoungYoo/lingua-proxy/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/hanyoungYoo/lingua-proxy/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/hanyoungYoo/lingua-proxy/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/hanyoungYoo/lingua-proxy/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/hanyoungYoo/lingua-proxy/releases/tag/v0.1.0

@@ -70,12 +70,58 @@
     "note": "Second run correcting two flaws in the first: prompts that ask for a bounded answer, and a ceiling high enough that nothing truncates. Four of six saved money, versus one of six before. The earlier -6.9% total was driven by truncation and open-ended prompts, not by language. Japanese in particular went from losing to saving 31% once its answer was allowed to finish.",
     "break_even_predicted": "5 of 6",
     "cases": [
-      { "id": "ko-1", "lang": "ko", "shrink": 0.72, "saved": 0.58 },
-      { "id": "ko-2", "lang": "ko", "shrink": 0.47, "saved": 0.22 },
-      { "id": "ja-1", "lang": "ja", "shrink": 0.54, "saved": 0.31 },
-      { "id": "ja-2", "lang": "ja", "shrink": 0.25, "saved": -0.09 },
-      { "id": "zh-1", "lang": "zh", "shrink": 0.14, "saved": 0.14 },
-      { "id": "zh-2", "lang": "zh", "shrink": 0.22, "saved": -0.09 }
+      {
+        "id": "ko-1",
+        "lang": "ko",
+        "shrink": 0.72,
+        "saved": 0.58
+      },
+      {
+        "id": "ko-2",
+        "lang": "ko",
+        "shrink": 0.47,
+        "saved": 0.22
+      },
+      {
+        "id": "ja-1",
+        "lang": "ja",
+        "shrink": 0.54,
+        "saved": 0.31
+      },
+      {
+        "id": "ja-2",
+        "lang": "ja",
+        "shrink": 0.25,
+        "saved": -0.09
+      },
+      {
+        "id": "zh-1",
+        "lang": "zh",
+        "shrink": 0.14,
+        "saved": 0.14
+      },
+      {
+        "id": "zh-2",
+        "lang": "zh",
+        "shrink": 0.22,
+        "saved": -0.09
+      }
     ]
+  },
+  "summarization_control": {
+    "question": "Is the saving real tokenization efficiency, or is the English answer simply a thinner answer? (i.e. summarization wearing a translation costume)",
+    "method": "Same question asked in Korean and in English with an identical explicit format instruction (markdown numbered list, exactly three items, one sentence each), so neither model can win by answering less.",
+    "korean": {
+      "output_tokens": 273,
+      "chars": 286,
+      "chars_per_token": 1.05
+    },
+    "english": {
+      "output_tokens": 96,
+      "chars": 410,
+      "chars_per_token": 4.27
+    },
+    "finding": "English delivered 43% MORE text using 65% FEWER tokens. A summarization effect would have produced less text, not more. The 4.1x gap is the tokenizer, not the content.",
+    "caveat": "Uncontrolled, some of the saving IS content loss: in a free-form comparison the round-tripped Korean answer lost a concrete example and all markdown structure (heading, numbered list), delivering 37% fewer characters. Five of five substantive facts survived. So translation genuinely compresses, but the round trip can also flatten formatting and drop illustrative detail."
   }
 }

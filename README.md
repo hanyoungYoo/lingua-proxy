@@ -198,6 +198,35 @@ on sprawling ones, and the split is roughly even across a naive prompt mix. Run
 `lingua-proxy bench` against your own traffic, and be willing to conclude it is
 not for you.
 
+### Is this just summarization in disguise?
+
+A fair challenge: if the English answer is shorter, maybe the saving is only
+that you received a thinner answer. Tested directly, and the result splits.
+
+**The compression is real.** Asked the same question in each language with an
+identical format instruction (numbered list, exactly three items, one sentence
+each), so neither side could win by saying less:
+
+| | Output tokens | Characters delivered | Chars per token |
+| --- | --- | --- | --- |
+| Korean | 273 | 286 | 1.05 |
+| English | 96 | 410 | 4.27 |
+
+English delivered **43% more text using 65% fewer tokens**. Summarization would
+have produced less text, not more. The 4.1x gap is how the tokenizer encodes
+each script, which is the premise of this whole project.
+
+**But some of it really is content loss.** In an uncontrolled comparison, the
+round-tripped answer delivered 37% fewer characters than the native one. All
+five substantive facts survived, but it lost a concrete example and every piece
+of markdown structure — the heading and the numbered list became a wall of
+prose.
+
+So: translation genuinely compresses, *and* the round trip can flatten
+formatting and drop illustrative detail. If you care about the shape of the
+answer and not only its facts, that is a real cost, and it is not one the
+dollar figures above capture.
+
 The proxy guards against the worst case automatically: a request whose
 `max_tokens` is large enough to risk truncation is passed through untranslated,
 because a truncated reply cannot shrink and the fee would buy nothing. The
@@ -254,6 +283,13 @@ Tool calls and reasoning stream through untouched, and keep-alives are sent
 while a translation is in flight, but you do not see non-English text appear
 word by word. Sentence-boundary streaming translation is the planned fix before
 1.0.
+
+**The answer arrives flatter.** Measured on a free-form question, the
+round-tripped reply kept every substantive fact but lost a concrete example and
+all markdown structure — a heading and numbered list came back as a paragraph,
+37% shorter. You are not only paying in money and latency; you may be paying in
+the shape of the answer. See
+[Is this just summarization in disguise?](#is-this-just-summarization-in-disguise)
 
 **Translation quality.** A cheap model does the translating. Technical nuance
 can shift. Markdown tables are best-effort. If a translation fails or mangles a
