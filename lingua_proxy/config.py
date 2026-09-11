@@ -183,6 +183,15 @@ class Settings:
     # Set to 0 to disable.
     max_output_tokens_for_translation: int = 16000
 
+    # Models format differently by language: the same question answered in
+    # Korean comes back with a heading and a numbered list, answered in English
+    # it comes back as prose. Translating that English faithfully still loses
+    # the structure, so the model is asked to keep its usual formatting.
+    # On by default: silently flattening an answer is not something a user
+    # opted into. Disable globally here, or per request with the
+    # x-lingua-preserve-formatting header.
+    preserve_formatting: bool = True
+
     @classmethod
     def resolve(
         cls,

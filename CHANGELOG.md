@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `preserve_formatting` (default **on**) and the per-request header
+  `x-lingua-preserve-formatting`. A model answering in English formats
+  differently than one answering in Korean, so round-tripped replies were losing
+  headings and lists. The translator was never at fault — it preserves markdown
+  correctly — so the fix instructs the model instead. Measured: the heading
+  returns and the reply carries 458 characters against the native answer's 354,
+  still using 36% fewer output tokens. It costs about half the saving (36%
+  instead of 67%), which is why it is opt-out rather than opt-in: silently
+  returning a thinner answer is not a trade a user agreed to.
+
 ### Changed
 
 - Documented what the savings cost in answer quality. A controlled test (same

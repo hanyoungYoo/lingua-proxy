@@ -145,7 +145,9 @@ async def test_system_prompt_and_tool_results_are_not_translated():
     await post(app, body)
 
     sent = transport.json_bodies[0]
-    assert sent["system"] == body["system"]
+    # The caller's own system blocks are untouched; the proxy appends its
+    # formatting instruction as an extra block rather than editing theirs.
+    assert sent["system"][0] == body["system"][0]
     assert sent["messages"][0]["content"][0] == body["messages"][0]["content"][0]
     assert KOREAN in translator.translated_segments
     assert not any("tool_result" in seg or "drwxr" in seg for seg in translator.translated_segments)
@@ -424,7 +426,9 @@ async def test_openai_round_trip_translates_both_directions():
             json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": KOREAN}]},
         )
 
-    assert transport.json_bodies[0]["messages"][0]["content"] == "Explain why this is slow."
+    sent = transport.json_bodies[0]["messages"]
+    user_turns = [m for m in sent if m["role"] == "user"]
+    assert user_turns[-1]["content"] == "Explain why this is slow."
     assert resp.json()["choices"][0]["message"]["content"].startswith("«ko»")
 
 

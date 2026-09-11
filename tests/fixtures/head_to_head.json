@@ -123,5 +123,31 @@
     },
     "finding": "English delivered 43% MORE text using 65% FEWER tokens. A summarization effect would have produced less text, not more. The 4.1x gap is the tokenizer, not the content.",
     "caveat": "Uncontrolled, some of the saving IS content loss: in a free-form comparison the round-tripped Korean answer lost a concrete example and all markdown structure (heading, numbered list), delivering 37% fewer characters. Five of five substantive facts survived. So translation genuinely compresses, but the round trip can also flatten formatting and drop illustrative detail."
+  },
+  "formatting_preservation": {
+    "question": "Can the lost structure be restored, and what does it cost?",
+    "method": "The translator was already preserving markdown faithfully; the loss came from the model formatting differently when answering in English. Fixed by instructing the model, not the translator. Same question, three paths.",
+    "paths": {
+      "native": {
+        "output_tokens": 313,
+        "chars": 354,
+        "heading": true,
+        "list": true
+      },
+      "proxied_hint_off": {
+        "output_tokens": 104,
+        "chars": 237,
+        "heading": false,
+        "list": false
+      },
+      "proxied_hint_on": {
+        "output_tokens": 200,
+        "chars": 458,
+        "heading": true,
+        "list": false
+      }
+    },
+    "finding": "The instruction restores the heading and delivers 458 chars, MORE than the native answer's 354, while still using 36% fewer output tokens. Bullets replaced the numbered list, so the shape is close but not identical.",
+    "cost": "Savings drop from 67% to 36% of native output tokens. That is the price of not silently flattening the answer, and it is on by default because quietly degrading output is not a trade users opted into."
   }
 }

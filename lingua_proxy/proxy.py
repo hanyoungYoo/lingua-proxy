@@ -151,10 +151,31 @@ async def relay(request: Request, upstream_base: str) -> Response:
 
 
 _BYPASS_VALUES = frozenset({"true", "1", "yes"})
+_FALSE_VALUES = frozenset({"false", "0", "no"})
+
+#: Asked of the model, not the translator. The translator already preserves
+#: markdown faithfully; the loss happens because a model answering in English
+#: formats differently than one answering in Korean.
+STYLE_INSTRUCTION = (
+    "Format your answer as you normally would for this question: keep headings, "
+    "numbered or bulleted lists, tables, code blocks, and concrete examples. Do "
+    "not flatten structured content into plain paragraphs, and do not shorten "
+    "your answer."
+)
 
 
 def _wants_bypass(request: Request) -> bool:
     return request.headers.get("x-lingua-bypass", "").strip().lower() in _BYPASS_VALUES
+
+
+def _wants_formatting_hint(request: Request, settings: Settings) -> bool:
+    """Per-request override of the formatting instruction."""
+    header = request.headers.get("x-lingua-preserve-formatting", "").strip().lower()
+    if header in _FALSE_VALUES:
+        return False
+    if header in _BYPASS_VALUES:
+        return True
+    return settings.preserve_formatting
 
 
 def _wants_review(request: Request) -> bool:
@@ -475,6 +496,9 @@ async def handle(request: Request, codec: Codec, upstream_base: str) -> Response
         forwarded, outcome = await pipeline.translate_request(body, codec, source)
     except TranslationSkipped:
         return await relay(request, upstream_base)
+
+    if _wants_formatting_hint(request, request.app.state.settings):
+        forwarded = codec.add_system_instruction(forwarded, STYLE_INSTRUCTION)
 
     payload = json.dumps(forwarded, ensure_ascii=False).encode()
 

@@ -96,6 +96,15 @@ class Codec:
     def is_stream(self, body: dict) -> bool:
         return bool(isinstance(body, dict) and body.get("stream"))
 
+    def add_system_instruction(self, body: dict, text: str) -> dict:
+        """Append an instruction without disturbing the existing system prompt.
+
+        A string prompt is promoted to block form and a new block appended, so
+        existing blocks -- and any ``cache_control`` markers on them -- are
+        left byte-identical and the cached prefix still matches.
+        """
+        raise NotImplementedError
+
     def max_output_tokens(self, body: dict) -> int | None:
         """The reply ceiling this request asked for, if it named one."""
         if not isinstance(body, dict):
@@ -197,6 +206,21 @@ class AnthropicMessagesCodec(Codec):
             refs.append(Ref(path=("content", position, "text"), text=text, role="assistant"))
         return refs
 
+    def add_system_instruction(self, body: dict, text: str) -> dict:
+        updated = copy.deepcopy(body)
+        system = updated.get("system")
+        block = {"type": "text", "text": text}
+
+        if system is None:
+            updated["system"] = [block]
+        elif isinstance(system, str):
+            updated["system"] = [{"type": "text", "text": system}, block]
+        elif isinstance(system, list):
+            updated["system"] = [*system, block]
+        else:
+            return body
+        return updated
+
     def usage(self, response: dict) -> Usage:
         raw = response.get("usage") if isinstance(response, dict) else None
         if not isinstance(raw, dict):
@@ -292,6 +316,20 @@ class OpenAIChatCodec(Codec):
                 )
             )
         return refs
+
+    def add_system_instruction(self, body: dict, text: str) -> dict:
+        updated = copy.deepcopy(body)
+        messages = updated.get("messages")
+        if not isinstance(messages, list):
+            return body
+        # Appended after any existing system message so it does not displace
+        # the caller's own instructions.
+        last_system = 0
+        for index, message in enumerate(messages):
+            if isinstance(message, dict) and message.get("role") in ("system", "developer"):
+                last_system = index + 1
+        messages.insert(last_system, {"role": "system", "content": text})
+        return updated
 
     def usage(self, response: dict) -> Usage:
         raw = response.get("usage") if isinstance(response, dict) else None

@@ -223,9 +223,34 @@ of markdown structure — the heading and the numbered list became a wall of
 prose.
 
 So: translation genuinely compresses, *and* the round trip can flatten
-formatting and drop illustrative detail. If you care about the shape of the
-answer and not only its facts, that is a real cost, and it is not one the
-dollar figures above capture.
+formatting. The second part is fixable, and it is fixed by default.
+
+### Keeping the answer's shape
+
+The translator was never the problem — it preserves markdown faithfully. The
+loss happens because a model answering in English formats differently than one
+answering in Korean. So the fix is an instruction to the model, not to the
+translator:
+
+| Path | Output tokens | Characters | Heading kept |
+| --- | --- | --- | --- |
+| No proxy | 313 | 354 | yes |
+| Proxy, instruction off | 104 | 237 | no |
+| Proxy, instruction on | 200 | 458 | yes |
+
+With it on you get **more content than the native answer** (458 characters
+versus 354) for **36% fewer output tokens**.
+
+It costs about half the saving: 36% instead of 67%. That is the price of not
+silently degrading your output, which is why it is **on by default** — quietly
+returning a thinner answer is not a trade anyone opted into. Turn it off if you
+would rather have the tokens:
+
+```toml
+preserve_formatting = false
+```
+
+Or per request, with the header `x-lingua-preserve-formatting: false`.
 
 The proxy guards against the worst case automatically: a request whose
 `max_tokens` is large enough to risk truncation is passed through untranslated,
@@ -284,12 +309,13 @@ while a translation is in flight, but you do not see non-English text appear
 word by word. Sentence-boundary streaming translation is the planned fix before
 1.0.
 
-**The answer arrives flatter.** Measured on a free-form question, the
-round-tripped reply kept every substantive fact but lost a concrete example and
-all markdown structure — a heading and numbered list came back as a paragraph,
-37% shorter. You are not only paying in money and latency; you may be paying in
-the shape of the answer. See
-[Is this just summarization in disguise?](#is-this-just-summarization-in-disguise)
+**The answer can arrive flatter.** A model answering in English formats
+differently than one answering in Korean, so a round-tripped reply used to lose
+headings and lists. The proxy now asks the model to keep its usual formatting,
+which restores the structure at the cost of roughly half the token saving. On by
+default; disable with `preserve_formatting = false` or the header
+`x-lingua-preserve-formatting: false`. See
+[Keeping the answer's shape](#keeping-the-answers-shape)
 
 **Translation quality.** A cheap model does the translating. Technical nuance
 can shift. Markdown tables are best-effort. If a translation fails or mangles a
