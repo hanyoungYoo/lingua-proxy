@@ -30,7 +30,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from lingua_proxy import __version__
 from lingua_proxy.audit import AuditLog
-from lingua_proxy.codecs import AnthropicMessagesCodec, Codec, OpenAIChatCodec
+from lingua_proxy.codecs import AnthropicMessagesCodec, Codec, OpenAIChatCodec, Usage
 from lingua_proxy.config import Settings, join_upstream
 from lingua_proxy.cost_log import CostLog, CostRow, estimate_tokens, summarize
 from lingua_proxy.detector import Detector
@@ -295,6 +295,10 @@ def record_cost(
         counterfactual_output=max(0, usage.output_tokens + output_delta),
         estimate_method="heuristic",
         translator_calls=outcome.translator_calls,
+        translator_usage=Usage(
+            input_tokens=outcome.translator_input_tokens,
+            output_tokens=outcome.translator_output_tokens,
+        ),
         memo_hits=outcome.memo_hits,
         memo_miss_assistant=outcome.memo_miss_assistant,
         fallback_reason=outcome.fallback_reason,

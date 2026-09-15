@@ -22,6 +22,8 @@ import re
 
 import httpx
 
+from lingua_proxy.codecs import Usage
+
 DEFAULT_TRANSLATOR_MODEL = "claude-haiku-4-5"
 DEFAULT_ANTHROPIC_VERSION = "2023-06-01"
 
@@ -96,6 +98,11 @@ class LLMTranslator(Translator):
         self.max_batch_chars = max_batch_chars
         self.timeout_budget = timeout_budget
         self._semaphore = asyncio.Semaphore(max_concurrency)
+        # The translator's own spend. This is ~92% of the round trip's
+        # overhead, and it was silently omitted from every cost figure until
+        # it was captured here.
+        self.last_usage = Usage()
+        self.total_usage = Usage()
 
     # -- headers ---------------------------------------------------------
 
@@ -183,6 +190,16 @@ class LLMTranslator(Translator):
             body = response.json()
         except ValueError as exc:
             raise TranslationError("translator returned a non-JSON body") from exc
+
+        raw = body.get("usage") or {}
+        self.last_usage = Usage(
+            input_tokens=int(raw.get("input_tokens") or 0),
+            output_tokens=int(raw.get("output_tokens") or 0),
+        )
+        self.total_usage = Usage(
+            input_tokens=self.total_usage.input_tokens + self.last_usage.input_tokens,
+            output_tokens=self.total_usage.output_tokens + self.last_usage.output_tokens,
+        )
 
         stop_reason = body.get("stop_reason")
         if stop_reason not in (None, "end_turn"):

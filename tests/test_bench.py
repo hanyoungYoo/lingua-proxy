@@ -176,27 +176,59 @@ def test_head_to_head_fixture_is_committed():
     assert doc["main_model"] and doc["translator_model"]
 
 
-def test_head_to_head_records_that_the_proxy_lost_overall():
-    """The README quotes this. It must stay tied to the measurement."""
-    doc = _head_to_head()
-    assert doc["totals"]["saved_ratio"] < 0
+def test_true_fee_measurement_is_the_one_the_readme_quotes():
+    """Earlier runs estimated the translator fee; this run measured it.
 
+    The README must quote the measured figures, not the superseded estimates.
+    """
+    doc = _head_to_head()["true_fee_measurement"]
+    assert len(doc["cases"]) == 6
     readme = pathlib.Path("README.md").read_text()
-    figure = f"{abs(doc['totals']['saved_ratio']) * 100:.1f}% more"
-    assert figure in readme, f"README does not quote the measured total ({figure})"
+
+    for case in doc["cases"]:
+        pct = round(abs(case["saved"]) * 100)
+        if case["saved"] > 0:
+            expected = f"{pct}% cheaper"
+        elif case["saved"] < 0:
+            expected = f"{pct}% more expensive"
+        else:
+            expected = "| 0% |"
+        assert expected in readme, f"README does not quote {expected} for {case}"
+
+
+def test_true_fee_cases_charge_the_translator():
+    """Every case carries real Haiku usage, not zeros or estimates."""
+    doc = _head_to_head()["true_fee_measurement"]
+    for case in doc["cases"]:
+        assert case["haiku_in"] > 0 and case["haiku_out"] > 0
+
+
+def test_formatting_off_pays_off_modestly_in_every_language():
+    """The honest claim: 11-36% with formatting off. Bind it to the data."""
+    doc = _head_to_head()["true_fee_measurement"]
+    off = [c for c in doc["cases"] if not c["preserve_formatting"]]
+    assert off and all(c["saved"] > 0 for c in off)
+    assert min(c["saved"] for c in off) >= 0.10
+    assert max(c["saved"] for c in off) <= 0.40
 
 
 def test_break_even_predicts_the_measured_outcomes():
-    """The pricing model should explain the observations, not contradict them."""
+    """The pricing model explains the formatting-off data.
+
+    With formatting on, the translated reply is longer than the native one,
+    which the simple model does not account for; those cases are excluded
+    here and the limitation is documented in the README.
+    """
     from lingua_proxy.cost_log import break_even_shrink, price_for
 
-    doc = _head_to_head()
+    doc = _head_to_head()["true_fee_measurement"]
     threshold = break_even_shrink(price_for(doc["main_model"]), price_for(doc["translator_model"]))
 
-    correct = sum(
-        1 for case in doc["cases"] if (case["shrink"] >= threshold) == (case["saved"] > 0)
-    )
-    assert correct >= len(doc["cases"]) - 1, "the cost model does not explain the data"
+    for case in doc["cases"]:
+        if case["preserve_formatting"]:
+            continue
+        shrink = 1 - case["sonnet_english_out"] / case["sonnet_native_out"]
+        assert (shrink >= threshold) == (case["saved"] > 0), case
 
 
 def test_head_to_head_contains_no_endpoint_or_prompt_text():
@@ -230,3 +262,65 @@ def test_readme_admits_the_content_loss():
 
     assert "summarization in disguise" in readme.lower()
     assert "flatter" in readme.lower()
+
+
+# -- the bench must charge for the translator ---------------------------
+
+
+def test_live_bench_includes_the_translator_fee(tmp_path, monkeypatch):
+    """A Sonnet-only comparison reports a win on requests that lost money."""
+    import json
+
+    from lingua_proxy.bench_runner import run_live_bench
+    from tests.conftest import Canned, RecordingTransport
+
+    def seg(text, in_tok, out_tok):
+        return Canned(
+            json_body={
+                "content": [
+                    {"type": "text", "text": f'<segs>\n<seg id="1">\n{text}\n</seg>\n</segs>'}
+                ],
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": in_tok, "output_tokens": out_tok},
+            }
+        )
+
+    def main(out_tok):
+        return Canned(
+            json_body={
+                "id": "m",
+                "content": [{"type": "text", "text": "answer"}],
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 50, "output_tokens": out_tok},
+            }
+        )
+
+    corpus = tmp_path / "corpus.jsonl"
+    corpus.write_text(
+        json.dumps(
+            {
+                "id": "p1",
+                "lang": "ko",
+                "category": "chat",
+                "prompt": "이 함수가 왜 느린지 설명해 주고, 더 빠르게 만들 수 있는 방법을 알려줘.",
+            }
+        )
+        + "\n"
+    )
+    monkeypatch.setattr(
+        "lingua_proxy.bench_runner.load_corpus", lambda: [json.loads(corpus.read_text())]
+    )
+    monkeypatch.setenv("LINGUA_BENCH_AUTH", "t")
+
+    # Native reply: 100 tokens. Proxied: Sonnet writes 90 (tiny shrink) but
+    # Haiku then writes 500 tokens of Korean. Net must be a loss.
+    transport = RecordingTransport(
+        [main(100), seg("Explain", 40, 8), main(90), seg("긴 한국어 답변", 45, 500)]
+    )
+
+    report = run_live_bench(upstream="https://gw.example/anthropic/", transport=transport)
+    bucket = report["categories"]["chat"]
+
+    assert bucket["translator_cost"] > 0, "translator fee was not charged"
+    assert bucket["proxied_cost"] > bucket["baseline_cost"]
+    assert bucket["verdict"] == "loses"

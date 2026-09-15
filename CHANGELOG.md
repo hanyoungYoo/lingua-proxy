@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The translator's cost was never measured.** The translator discarded the
+  `usage` field the API returns, so every cost row recorded the translation fee
+  as zero and `bench` compared the expensive model's usage alone. That fee is
+  about 92% of the round trip's overhead. Both now read Haiku's real usage, and
+  a test asserts a request whose fee exceeds its saving is reported as a loss.
+- **The README's savings were overstated.** The head-to-head runs behind the
+  earlier 22–69% figures estimated the fee from character counts divided by
+  three; Korean encodes near one character per token, so the reply-back leg was
+  undercounted roughly threefold. Re-measured with real usage: Korean 36%,
+  Japanese 11%, Chinese 28% with formatting off; 0%, −6% and 39% with the
+  default formatting preservation on. The old figures are marked superseded in
+  the fixture and the README carries the correction.
+
 ### Added
 
 - `preserve_formatting` (default **on**) and the per-request header

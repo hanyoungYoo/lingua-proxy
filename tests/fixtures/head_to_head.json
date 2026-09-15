@@ -175,5 +175,89 @@
       "finding": "Naming the mirroring rule ('if it asks for N points, use a numbered list') matched the native shape on 2 of 3 prompts against 1 of 3 for the first version, and used fewer tokens doing it.",
       "limit": "Exact shape matching is not achievable and is the wrong target: the native answer is itself inconsistent, using a heading for the Korean list question and none for the same question in Japanese. The goal is a structured answer, not a byte-identical one."
     }
+  },
+  "true_fee_measurement": {
+    "measured_on": "2026-09-15",
+    "supersedes": [
+      "cases",
+      "followup_bounded_untruncated"
+    ],
+    "why": "Every earlier run estimated the translator's fee from character counts divided by three. Korean encodes near 1 char/token, so that undercounted the reply-back leg roughly threefold. This run captures Haiku's real usage from the API for every translator call.",
+    "main_model": "claude-sonnet-4-6",
+    "translator_model": "claude-haiku-4-5",
+    "cases": [
+      {
+        "lang": "ko",
+        "preserve_formatting": false,
+        "sonnet_native_out": 351,
+        "sonnet_english_out": 106,
+        "haiku_in": 408,
+        "haiku_out": 281,
+        "native_usd": 0.00537,
+        "proxied_usd": 0.00346,
+        "saved": 0.36
+      },
+      {
+        "lang": "ko",
+        "preserve_formatting": true,
+        "sonnet_native_out": 387,
+        "sonnet_english_out": 190,
+        "haiku_in": 492,
+        "haiku_out": 449,
+        "native_usd": 0.00591,
+        "proxied_usd": 0.00589,
+        "saved": 0.0
+      },
+      {
+        "lang": "ja",
+        "preserve_formatting": false,
+        "sonnet_native_out": 308,
+        "sonnet_english_out": 156,
+        "haiku_in": 435,
+        "haiku_out": 272,
+        "native_usd": 0.0047,
+        "proxied_usd": 0.00419,
+        "saved": 0.11
+      },
+      {
+        "lang": "ja",
+        "preserve_formatting": true,
+        "sonnet_native_out": 280,
+        "sonnet_english_out": 158,
+        "haiku_in": 451,
+        "haiku_out": 278,
+        "native_usd": 0.00428,
+        "proxied_usd": 0.00452,
+        "saved": -0.06
+      },
+      {
+        "lang": "zh",
+        "preserve_formatting": false,
+        "sonnet_native_out": 795,
+        "sonnet_english_out": 360,
+        "haiku_in": 636,
+        "haiku_out": 511,
+        "native_usd": 0.01203,
+        "proxied_usd": 0.00867,
+        "saved": 0.28
+      },
+      {
+        "lang": "zh",
+        "preserve_formatting": true,
+        "sonnet_native_out": 892,
+        "sonnet_english_out": 329,
+        "haiku_in": 610,
+        "haiku_out": 459,
+        "native_usd": 0.01349,
+        "proxied_usd": 0.00816,
+        "saved": 0.39
+      }
+    ],
+    "findings": [
+      "Haiku writes Korean at ~0.9 chars/token and Chinese/Japanese at ~1.1, the same rate the expensive model pays. The fee is cheaper only because Haiku's price per token is a third of Sonnet's, not because it tokenizes the language better.",
+      "Each translator call carries ~350 tokens of fixed prompt overhead, so tiny requests lose regardless of shrink.",
+      "With preserve_formatting on (the default), the Korean saving is zero: Haiku writing 449 tokens of structured Korean costs what Sonnet saved. Chinese still wins at 39%. The default is a quality/cost trade, not a free improvement.",
+      "The earlier headline figures (58-69% for Korean) were estimate artifacts. True savings on this sample: 0-39%."
+    ]
   }
 }

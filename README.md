@@ -12,11 +12,12 @@ Korean, Japanese, Chinese, Arabic and other non-Latin scripts tokenize two to
 four times more expensively than English. lingua-proxy pays a small translation
 fee on a cheap model to avoid that penalty on an expensive one.
 
-> **Status: v0.1, alpha, and it does not pay off for every workload.** Measured
-> head to head, focused questions saved 22–58% while sprawling ones lost money,
-> and a deliberately mixed sample came out **6.9% more expensive** overall. Read
-> the [Honest cost model](#honest-cost-model) first, and run `lingua-proxy bench`
-> against your own traffic before adopting it.
+> **Status: v0.1, alpha, and it does not pay off for every workload.** With
+> every token charged, including the translator's own, focused questions saved
+> **0–39%** depending on language and settings, and sprawling or truncated
+> replies lost money. An earlier version of this README overstated the savings;
+> the [Honest cost model](#honest-cost-model) has the correction. Run
+> `lingua-proxy bench` against your own traffic before adopting it.
 
 ## Quickstart
 
@@ -146,57 +147,53 @@ proxy declines to translate rather than risk mangling a fragment.
 
 ### Measured head to head
 
-Six prompts, each sent twice: once straight to the model in its original
-language, once through the proxy. Every token on both paths counted, including
-the translator's own calls. Sonnet 4.6 with a Haiku translator:
+Each prompt is sent twice: straight to the model in its own language, and
+through the proxy. **Every token on both paths is charged, including the
+translator's own calls, read from the API's usage fields.** Sonnet 4.6 with a
+Haiku translator, one three-sentence question per language:
 
-| Prompt | Answer shrank by | Result |
+| Language | Formatting preserved (default) | Formatting off |
 | --- | --- | --- |
-| Korean, bounded | 80% | **69% cheaper** |
-| Korean, open-ended | 33% | 6% cheaper |
-| Chinese, open-ended | 0% | no change |
-| Chinese, bounded | −8% | 8% more expensive |
-| Japanese, bounded | 26% | 12% more expensive |
-| Japanese, open-ended | 0% | 40% more expensive |
-| **Total** | | **6.9% more expensive** |
+| Korean | 0% | 36% cheaper |
+| Japanese | 6% more expensive | 11% cheaper |
+| Chinese | 39% cheaper | 28% cheaper |
 
-Read that total carefully: **on this sample the proxy cost more than it saved.**
+Raw tokens for every call are in `tests/fixtures/head_to_head.json` under
+`true_fee_measurement`.
 
-But that sample was unkind in a specific way, and a second run isolates why.
-Four of those six replies hit `max_tokens`. A truncated reply is pinned to the
-same length in both languages, so it cannot shrink and the fee buys nothing.
-Repeating the comparison with bounded questions and a ceiling nothing reached:
+**A correction.** Earlier versions of this section reported savings of 22–69%.
+Those runs estimated the translator's fee from character counts divided by
+three. Korean encodes at about one character per token, so the fee for writing
+the reply back was undercounted roughly threefold and the savings were
+overstated. The table above replaces them, and the shipped `bench` command now
+charges the fee too — before this version it compared the expensive model's
+usage alone.
 
-| Prompt | Answer shrank by | Result |
-| --- | --- | --- |
-| Korean | 72% | 58% cheaper |
-| Japanese | 54% | 31% cheaper |
-| Korean | 47% | 22% cheaper |
-| Chinese | 14% | 14% cheaper |
-| Japanese | 25% | 9% more expensive |
-| Chinese | 22% | 9% more expensive |
+**Why the fee is so large.** Haiku writes Korean at the same ~0.9 characters
+per token that Sonnet does. It is cheaper only because its price per token is a
+third of Sonnet's, not because it handles the language better. Each translator
+call also carries about 350 tokens of fixed prompt, so very small requests lose
+regardless of how well they compress.
 
-Four of six saved, against one of six before. Japanese went from losing to
-saving 31% once its answer was allowed to finish. So the deciding factor is not
-which language you write in — it is **whether the answer is short enough to
-compress and long enough to matter**. The break-even rule called five of six in
-both runs.
-
-Raw numbers for both runs are in `tests/fixtures/head_to_head.json`.
+**Why formatting preservation can erase the saving.** With it on, the
+translated Korean reply came back *longer* than the native one — 449 tokens
+against 387 — and Haiku writing those extra tokens cost exactly what Sonnet had
+saved. Chinese was unaffected on this sample. This is a genuine quality-versus-
+cost trade, not a free improvement; see
+[Keeping the answer's shape](#keeping-the-answers-shape).
 
 | Workload | Verdict |
 | --- | --- |
-| Bounded questions, any non-Latin language | Usually pays off |
+| Focused questions, formatting off | Pays off modestly, 11–36% |
+| Focused questions, formatting on | Language-dependent, 0–39% |
 | Replies that hit `max_tokens` | Always loses; nothing can shrink |
 | Open-ended "tell me everything" | Usually loses |
 | Code-heavy payloads | Can cost more than it saves |
 | Very short prompts | No effect, translation is skipped |
 | Quality-critical or legal text | Not recommended at any price |
 
-The honest summary: this saves real money on focused questions and loses money
-on sprawling ones, and the split is roughly even across a naive prompt mix. Run
-`lingua-proxy bench` against your own traffic, and be willing to conclude it is
-not for you.
+These are single samples at temperature 0. Treat them as the shape of the
+answer, not its precision, and run `lingua-proxy bench` on your own traffic.
 
 ### Is this just summarization in disguise?
 
@@ -230,44 +227,30 @@ formatting. The second part is fixable, and it is fixed by default.
 The translator was never the problem — it preserves markdown faithfully. The
 loss happens because a model answering in English formats differently than one
 answering in Korean. So the fix is an instruction to the model, not to the
-translator:
+translator, asking it to mirror the structure the question implies.
 
-| Path | Output tokens | Characters | Heading kept |
+It works: the heading returns and the reply carries more content than the
+native answer. But charged honestly, it is not free:
+
+| Korean, three-sentence question | Sonnet writes | Haiku writes | Net vs native |
 | --- | --- | --- | --- |
-| No proxy | 313 | 354 | yes |
-| Proxy, instruction off | 104 | 237 | no |
-| Proxy, instruction on | 200 | 458 | yes |
+| No proxy | 387 Korean tokens | — | — |
+| Proxy, instruction off | 106 English | 281 Korean | 36% cheaper |
+| Proxy, instruction on | 190 English | 449 Korean | 0% |
 
-With it on you get **more content than the native answer** (458 characters
-versus 354) for **36% fewer output tokens**.
+The structured reply is longer than the native one, and Haiku writing the
+extra Korean consumed the whole saving on this sample. Chinese kept a 39%
+saving with it on, so the cost is language- and prompt-dependent.
 
-The instruction asks the model to mirror the structure the question implies, so
-a question asking for three points comes back as three numbered items. Across a
-three-prompt sample it matched the native shape twice; the earlier, vaguer
-wording matched once. Exact matching is not the goal and is not achievable —
-the model's own formatting varies by language, using a heading for a Korean
-list question and none for the same question in Japanese. The aim is a
-structured answer, not a byte-identical one.
-
-It costs about half the saving: 36% instead of 67%. That is the price of not
-silently degrading your output, which is why it is **on by default** — quietly
-returning a thinner answer is not a trade anyone opted into. Turn it off if you
-would rather have the tokens:
+It is **on by default** because silently returning a thinner, flatter answer
+is not a trade anyone opted into. But you should know you may be paying the
+entire saving for it. Turn it off if you would rather have the tokens:
 
 ```toml
 preserve_formatting = false
 ```
 
 Or per request, with the header `x-lingua-preserve-formatting: false`.
-
-The proxy guards against the worst case automatically: a request whose
-`max_tokens` is large enough to risk truncation is passed through untranslated,
-because a truncated reply cannot shrink and the fee would buy nothing. The
-response carries `x-lingua-skipped: long_output`. Tune or disable it:
-
-```toml
-max_output_tokens_for_translation = 16000  # 0 disables the guard
-```
 
 ### Which translator should I use?
 

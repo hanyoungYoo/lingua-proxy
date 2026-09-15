@@ -11,6 +11,7 @@ Every request costs money, so this is opt-in and never runs by default.
 from __future__ import annotations
 
 import os
+import pathlib
 import time
 
 import httpx
@@ -18,7 +19,7 @@ import httpx
 from lingua_proxy.bench import BenchResult, build_report, load_corpus
 from lingua_proxy.codecs import AnthropicMessagesCodec
 from lingua_proxy.config import Settings
-from lingua_proxy.cost_log import price_for
+from lingua_proxy.cost_log import CostLog, price_for
 from lingua_proxy.proxy import create_app
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
@@ -70,12 +71,21 @@ async def _one(
     except Exception as exc:  # noqa: BLE001 - one bad prompt must not end the run
         return BenchResult(row["id"], row["lang"], row["category"], error=str(exc)[:200])
 
+    translator_cost = 0.0
+    log_path = getattr(client, "_lingua_cost_log", None)
+    if log_path is not None:
+        rows = CostLog(path=log_path).rows()
+        if rows:
+            last = rows[-1]
+            translator_cost = price_for(last.translator_model).cost(last.translator_usage)
+
     return BenchResult(
         id=row["id"],
         lang=row["lang"],
         category=row["category"],
         baseline_cost=price.cost(baseline_usage),
-        proxied_cost=price.cost(proxied_usage),
+        proxied_cost=price.cost(proxied_usage) + translator_cost,
+        translator_cost=translator_cost,
         latency_ms=(time.monotonic() - started) * 1000,
         detail={
             "baseline_input": baseline_usage.input_tokens,
@@ -88,13 +98,26 @@ async def _one(
     )
 
 
-def run_live_bench(*, upstream: str, mode: str = "estimate", model: str | None = None) -> dict:
-    """Run every corpus prompt through an in-process proxy against ``upstream``."""
+def run_live_bench(
+    *,
+    upstream: str,
+    mode: str = "estimate",
+    model: str | None = None,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> dict:
+    """Run every corpus prompt through an in-process proxy against ``upstream``.
+
+    The translator's fee is read from the cost row the proxy writes for each
+    proxied request, so the comparison charges for every token on both paths.
+    """
     import asyncio
+    import tempfile
 
     model = model or os.environ.get("LINGUA_BENCH_MODEL", DEFAULT_MODEL)
-    settings = Settings(upstream_anthropic_url=upstream, memo_persist=False)
-    app = create_app(settings)
+    cost_log = pathlib.Path(tempfile.mkdtemp()) / "bench_cost.jsonl"
+    settings = Settings(upstream_anthropic_url=upstream, memo_persist=False, cost_log_path=cost_log)
+    app = create_app(settings, transport=transport)
+    app.state.bench_cost_log = cost_log
     codec = AnthropicMessagesCodec()
 
     async def go() -> list[BenchResult]:
@@ -102,6 +125,7 @@ def run_live_bench(*, upstream: str, mode: str = "estimate", model: str | None =
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://bench.test"
         ) as client:
+            client._lingua_cost_log = cost_log
             for row in load_corpus():
                 results.append(await _one(client, row, model, codec))
         return results

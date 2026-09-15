@@ -40,6 +40,8 @@ class Outcome:
     skipped_reason: str | None = None
     fallback_reason: str | None = None
     translator_calls: int = 0
+    translator_input_tokens: int = 0
+    translator_output_tokens: int = 0
     memo_hits: int = 0
     memo_miss_assistant: int = 0
     original_body: dict | None = None
@@ -152,6 +154,10 @@ class Pipeline:
             raise TranslationSkipped from exc
 
         outcome.translator_calls += 1
+        usage = getattr(self.translator, "last_usage", None)
+        if usage is not None:
+            outcome.translator_input_tokens += usage.input_tokens
+            outcome.translator_output_tokens += usage.output_tokens
 
         if len(outputs) != len(texts):
             outcome.fallback_reason = "segment_count_mismatch"
