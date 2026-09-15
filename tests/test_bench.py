@@ -324,3 +324,73 @@ def test_live_bench_includes_the_translator_fee(tmp_path, monkeypatch):
     assert bucket["translator_cost"] > 0, "translator fee was not charged"
     assert bucket["proxied_cost"] > bucket["baseline_cost"]
     assert bucket["verdict"] == "loses"
+
+
+# -- the measurements doc ------------------------------------------------
+#
+# The README quotes conclusions; docs/measurements.md carries the method and
+# the raw counts. Both are prose about committed fixtures, so both can drift
+# away from the data. These pin the doc the same way the README is pinned.
+
+
+def _measurements() -> str:
+    return pathlib.Path("docs/measurements.md").read_text()
+
+
+def test_measurements_doc_exists_and_readme_links_to_it():
+    """The README delegates the method; the link must not rot."""
+    doc = _measurements()
+    assert doc.strip()
+
+    readme = pathlib.Path("README.md").read_text()
+    assert "docs/measurements.md" in readme
+
+
+def test_measurements_doc_quotes_every_head_to_head_case():
+    """Every measured case appears in the doc, with its real token counts."""
+    cases = _head_to_head()["true_fee_measurement"]["cases"]
+    doc = _measurements()
+
+    for case in cases:
+        for field in ("sonnet_native_out", "sonnet_english_out", "haiku_in", "haiku_out"):
+            assert str(case[field]) in doc, f"measurements doc omits {field}={case[field]}"
+
+
+def test_measurements_doc_quotes_the_per_language_input_figures():
+    """The per-language breakdown moved out of the README; pin it here."""
+    by_lang = _recorded()["by_language"]
+    doc = _measurements()
+
+    for lang, row in by_lang.items():
+        figure = f"{row['input_savings_ratio'] * 100:.1f}%"
+        assert figure in doc, f"measurements doc omits {figure} for {lang}"
+
+
+def test_measurements_doc_reports_the_truncation_caveat():
+    """Four of six replies hit max_tokens. Burying that would flatter the tool."""
+    doc = _measurements().lower()
+
+    assert "max_tokens" in doc
+    assert "four of" in doc, "the truncation count is not stated"
+
+
+def test_measurements_doc_explains_the_superseded_estimate():
+    """The correction is auditable: the doc must say what was wrong and why."""
+    doc = _measurements().lower()
+
+    assert "threefold" in doc
+    assert "58" in doc and "69" in doc, "the superseded figures are not named"
+
+
+def test_readme_keeps_the_verdict_not_just_the_method_link():
+    """Delegating the method must not delegate the bad news with it.
+
+    A reader who never opens the measurements doc still has to learn that
+    savings can be zero, that truncated replies always lose, and that the
+    honest range is 0-39%.
+    """
+    readme = pathlib.Path("README.md").read_text()
+
+    assert "0–39%" in readme or "0-39%" in readme
+    assert "max_tokens" in readme
+    assert "44.6%" in readme
