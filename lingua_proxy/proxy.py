@@ -480,7 +480,18 @@ async def stream_translated(
         finally:
             await upstream.aclose()
 
+    # A streamed reply gets the same transparency as a buffered one. Agentic
+    # clients stream by default, so a header that only appears on the
+    # non-streaming path is missing from nearly all real traffic -- and it is
+    # the header you reach for when an answer looks like it addressed a
+    # different question.
     stream_headers = build_response_headers(upstream)
+    sent_english = (
+        None
+        if outcome.reply_only
+        else " ".join(ref.text for ref in codec.user_refs(outcome.forwarded_body or {}))
+    )
+    stream_headers.update(_transparency_headers(source, sent_english))
     if outcome.reply_only:
         stream_headers["x-lingua-reply-only"] = "true"
 
