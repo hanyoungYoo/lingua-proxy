@@ -20,11 +20,22 @@ from dataclasses import dataclass, field
 from fnmatch import fnmatch
 
 from lingua_proxy.codecs import Codec, Ref
-from lingua_proxy.detector import Detector
+from lingua_proxy.detector import Detector, non_latin_share
 from lingua_proxy.memo import Memo
-from lingua_proxy.segments import mask, normalize_placeholders, restore, validate
+from lingua_proxy.segments import (
+    mask,
+    normalize_placeholders,
+    prose_share,
+    restore,
+    validate,
+)
 
 ENGLISH = "en"
+
+#: Above this share of non-Latin letters, a reply that was supposed to be in
+#: English clearly is not. Generous, because an English answer may legitimately
+#: quote the user's own words back.
+_NON_LATIN_REPLY_LIMIT = 0.15
 
 
 class TranslationSkipped(Exception):
@@ -36,6 +47,9 @@ class Outcome:
     """What the pipeline did, for the cost log."""
 
     translated: bool = False
+    #: True when the request was forwarded in the user's own language and only
+    #: the reply was translated.
+    reply_only: bool = False
     source_lang: str | None = None
     skipped_reason: str | None = None
     fallback_reason: str | None = None
@@ -61,12 +75,14 @@ class Pipeline:
         memo: Memo,
         skip_models: tuple[str, ...] = (),
         max_output_tokens: int = 0,
+        reply_only_prose_share: float = 0.0,
     ):
         self.detector = detector
         self.translator = translator
         self.memo = memo
         self.skip_models = skip_models
         self.max_output_tokens = max_output_tokens
+        self.reply_only_prose_share = reply_only_prose_share
 
     # -- decisions -------------------------------------------------------
 
@@ -89,6 +105,27 @@ class Pipeline:
 
         return None
 
+    def should_use_reply_only(self, body: dict, codec: Codec) -> bool:
+        """True when translating the request cannot pay for itself.
+
+        A prompt that is mostly code masks down to almost nothing, so the
+        translator is handed little and the fee buys little. Forwarding the
+        user's own text and translating only the reply keeps the saving --
+        which comes from the expensive model writing English -- without paying
+        that fee.
+
+        Judged on the latest user turn, which is the only one ``user_refs``
+        exposes and the same text that decides the conversation's language.
+        """
+        if self.reply_only_prose_share <= 0.0:
+            return False
+
+        for ref in codec.user_refs(body):
+            if not self._has_prose(ref.text):
+                continue
+            return prose_share(ref.text) < self.reply_only_prose_share
+        return False
+
     @staticmethod
     def _has_prose(text: str) -> bool:
         """True when a segment contains words, not just protected spans.
@@ -98,6 +135,19 @@ class Pipeline:
         translation model wastes a call and risks damaging it.
         """
         return bool(mask(text).prose.strip())
+
+    @staticmethod
+    def _reply_is_english(refs: list[Ref]) -> bool:
+        """Whether a reply came back in English, as reply-only mode asked.
+
+        Uses the script share rather than the statistical detector: the
+        question is only whether the model wrote in the user's own non-Latin
+        script, and that is visible without a model call.
+        """
+        prose = " ".join(mask(ref.text).prose for ref in refs).strip()
+        if not prose:
+            return True
+        return non_latin_share(prose) < _NON_LATIN_REPLY_LIMIT
 
     def _detect_ref(self, ref: Ref):
         """Detect the language of one segment, ignoring injected reminders."""
@@ -236,6 +286,13 @@ class Pipeline:
         """Rewrite a reply back into the user's language."""
         refs = codec.response_refs(response)
         if not refs:
+            return response
+
+        if outcome.reply_only and not self._reply_is_english(refs):
+            # The model was asked to answer in English and did not. Translating
+            # now would round-trip the user's own language through a model for
+            # nothing, so hand the reply back as it came.
+            outcome.fallback_reason = "reply_not_english"
             return response
 
         texts = [ref.text for ref in refs]
