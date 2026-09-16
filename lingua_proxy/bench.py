@@ -57,6 +57,10 @@ class BenchResult:
     translator_cost: float = 0.0
     latency_ms: float = 0.0
     error: str | None = None
+    #: Whether the proxy reported translating this request. A translated
+    #: request with a zero fee means the fee was not measured, which would
+    #: overstate the saving.
+    translated: bool = False
     detail: dict = field(default_factory=dict)
 
     @property
@@ -99,11 +103,20 @@ def build_report(results: list[BenchResult]) -> dict:
         # A truncated reply pins both runs to the same output length and hides
         # real savings, so the count is surfaced rather than buried.
         "truncated": sum(1 for r in good if r.detail.get("truncated")),
+        # A request the proxy translated must carry a fee. If it does not, the
+        # fee went unmeasured and every saving below it is overstated -- the
+        # one failure mode that makes this tool lie in its own favour.
+        "unmeasured_fee": sum(1 for r in good if r.translated and r.translator_cost <= 0.0),
     }
 
 
 def exit_code_for(report: dict, *, min_savings: float) -> int:
     """Non-zero when the headline claim does not hold on real traffic."""
+    # An unmeasured fee is worse than a bad result: the numbers are wrong in
+    # this tool's own favour, so the run must not be read as a pass.
+    if report.get("unmeasured_fee"):
+        return 2
+
     chat = report["categories"].get("chat")
     if not chat or chat["n"] == 0:
         return 0
@@ -153,6 +166,14 @@ def render(report: dict, console: Console | None = None) -> None:
             f"[yellow]{report['truncated']} reply/replies hit the token ceiling.[/yellow] "
             "Truncated replies understate savings, because both runs are forced to the "
             "same output length. Raise max_tokens for a cleaner measurement."
+        )
+
+    if report.get("unmeasured_fee"):
+        console.print(
+            f"[red]{report['unmeasured_fee']} translated request(s) recorded a translator "
+            "fee of $0.00.[/red] That is not a free translation: the fee went unmeasured, "
+            "so every saving above is overstated. Treat this run as invalid rather than "
+            "as good news, and check that the proxy is writing its cost log."
         )
 
 
