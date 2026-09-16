@@ -145,6 +145,48 @@ async def test_streamed_text_is_translated():
     assert "event: message_stop" in out
 
 
+async def test_a_streamed_reply_says_what_the_model_was_actually_asked():
+    """Transparency cannot only work on the path clients do not use.
+
+    Agentic clients stream by default, so a debugging story that relies on
+    x-lingua-prompt-en is worth nothing if the header is absent on exactly
+    the traffic people run.
+    """
+    app, _, _ = build(anthropic_stream("The function is slow."))
+    async with client_for(app) as c:
+        async with c.stream(
+            "POST",
+            "/v1/messages",
+            json={
+                "model": "claude-sonnet-4-6",
+                "stream": True,
+                "messages": [{"role": "user", "content": KOREAN}],
+            },
+        ) as resp:
+            await resp.aread()
+            assert resp.headers.get("x-lingua-translated") == "true"
+            assert resp.headers.get("x-lingua-source-lang") == "ko"
+            assert resp.headers.get("x-lingua-prompt-en"), (
+                "the English actually sent is not recoverable from a streamed reply"
+            )
+
+
+async def test_an_untranslated_stream_says_so_too():
+    app, _, _ = build(anthropic_stream("Already English."))
+    async with client_for(app) as c:
+        async with c.stream(
+            "POST",
+            "/v1/messages",
+            json={
+                "model": "claude-sonnet-4-6",
+                "stream": True,
+                "messages": [{"role": "user", "content": "Why is this function slow?"}],
+            },
+        ) as resp:
+            await resp.aread()
+            assert resp.headers.get("x-lingua-translated") == "false"
+
+
 async def test_message_start_and_usage_are_preserved():
     app, _, _ = build(anthropic_stream("Hello."))
     out = await collect(
