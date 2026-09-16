@@ -86,6 +86,7 @@ async def _one(
         baseline_cost=price.cost(baseline_usage),
         proxied_cost=price.cost(proxied_usage) + translator_cost,
         translator_cost=translator_cost,
+        translated=proxied.headers.get("x-lingua-translated") == "true",
         latency_ms=(time.monotonic() - started) * 1000,
         detail={
             "baseline_input": baseline_usage.input_tokens,
