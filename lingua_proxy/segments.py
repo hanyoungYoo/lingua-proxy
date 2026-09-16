@@ -173,6 +173,23 @@ def mask(text: str) -> Masked:
     return Masked(masked=masked, placeholders=placeholders, prose=prose)
 
 
+def prose_share(text: str) -> float:
+    """How much of ``text`` is prose rather than protected technical content.
+
+    Masking already separates the two, so this is a ratio of what survives
+    masking to what went in. A pure code fence scores 0.0; ordinary prose
+    scores 1.0.
+
+    Used to spot payloads where translating the request cannot pay: if a prompt
+    is nearly all code, the translator is handed almost nothing and the fee
+    buys almost nothing.
+    """
+    original = (text or "").strip()
+    if not original:
+        return 0.0
+    return min(1.0, len(mask(original).prose.strip()) / len(original))
+
+
 def restore(text: str, placeholders: dict[str, str]) -> str:
     """Put the original technical spans back."""
     for token, value in placeholders.items():

@@ -28,8 +28,10 @@ pip install lingua-proxy
 lingua-proxy wrap claude
 ```
 
-`wrap` starts the proxy, launches Claude Code pointed at it, and restores your
-settings when you exit. Nothing is left behind.
+That is the whole setup. `wrap` starts the proxy, points Claude Code at it for
+the lifetime of that session, and restores your settings when you exit — no
+permanent configuration change, no daemon to manage, nothing left behind. If it
+is not worth it, stop using the command.
 
 Other commands:
 
@@ -111,6 +113,26 @@ reply must come out at least **38% shorter** to break even:
 Whether your traffic clears that bar is an empirical question, and the answer is
 often no.
 
+### Why the output side, and not the system prompt
+
+A reasonable objection: in an agentic coding session the system prompt, the tool
+definitions and files like `CLAUDE.md` dwarf your question, so isn't that where
+the tokens are?
+
+By count, yes. By cost, no, and the gap is the whole reason this proxy leaves
+them alone. Those blocks are identical on every turn, so they are served from
+the prompt cache at roughly a tenth of the input price, while output tokens are
+never cached and are several times more expensive than input to begin with. The
+biggest pile of tokens is also the cheapest pile.
+
+Translating them would also break the thing that makes them cheap. A cached
+prefix has to be byte-identical to hit; rewriting it once would invalidate the
+cache, and rewriting it per turn would keep it permanently invalidated. The
+saving would be smaller than the cache miss it caused.
+
+So the target is the expensive, uncacheable side: the answer the model writes
+back. That is a deliberate choice, not an oversight.
+
 **Measured head to head.** Every token on both paths charged, including the
 translator's own calls. Sonnet 4.6 with a Haiku translator, one three-sentence
 question per language:
@@ -138,7 +160,7 @@ replace them. Method, raw counts, and the full correction are in
 | Focused questions, formatting on | Language-dependent, 0–39% |
 | Replies that hit `max_tokens` | Always loses; nothing can shrink |
 | Open-ended "tell me everything" | Usually loses |
-| Code-heavy payloads | Can cost more than it saves |
+| Code-heavy payloads | Request translation is skipped automatically |
 | Very short prompts | No effect, translation is skipped |
 | Quality-critical or legal text | Not recommended at any price |
 
@@ -188,6 +210,39 @@ preserve_formatting = false
 
 Or per request, with the header `x-lingua-preserve-formatting: false`.
 
+### Code-heavy prompts
+
+A prompt that is mostly code is the case this proxy is worst at. The code is
+masked out before translation, so the translator is handed a sentence or two of
+prose and charges for the call anyway. The request-side fee buys almost nothing.
+
+Skipping translation outright would not fix it, because that also skips the
+*saving*: the model would answer your Korean prompt in Korean, and the expensive
+model writing Korean is the cost this whole project exists to avoid.
+
+So when a prompt falls below a prose threshold, the proxy sends **your own text,
+untranslated, with an instruction to answer in English**, and translates only
+the reply. The saving still comes from the reply; the fee that was buying
+nothing is gone. Your code is never handed to a translation model at all, which
+also removes the risk of it being paraphrased.
+
+```toml
+reply_only_prose_share = 0.35   # 0.0 disables
+```
+
+Or per request, with `x-lingua-reply-only: true` / `false`. A reply that used
+this path says so with `x-lingua-reply-only: true`.
+
+Two honest limits. You give up the input-side saving, which on these prompts was
+near zero anyway. And if the model ignores the instruction and answers in your
+language regardless, the proxy detects that and hands the reply back untouched
+rather than round-tripping it — you get a correct answer with no saving, not a
+mangled one.
+
+Very short prompts are unaffected: below the detector's minimum length nothing
+is translated in either direction, so a one-line question with a big code block
+passes straight through.
+
 ### Which translator should I use?
 
 Ask, rather than sweeping models at real cost:
@@ -214,8 +269,8 @@ Korean, anything that shortens its reply increases the benefit:
   far more than the same question asked open-endedly.
 - **Set `max_tokens` to a real limit, not a huge one.** A ceiling the answer
   actually hits guarantees zero shrink and a wasted fee.
-- **Send bulk or code-heavy work through `x-lingua-bypass: true`.** Those are
-  the cases that lose money.
+- **Send bulk work through `x-lingua-bypass: true`.** Code-heavy prompts are
+  handled automatically; see [Code-heavy prompts](#code-heavy-prompts).
 
 Run the benchmark yourself, against your own upstream and your own model:
 
@@ -227,6 +282,20 @@ It reports dollars, not just tokens, because the translator model is priced
 differently from your main model. It labels each category `pays off`,
 `marginal`, or `loses`, and it is designed to be able to tell you that the
 answer is no.
+
+## Configuration
+
+Settings live in `~/.lingua-proxy/config.toml`. Every `toml` block in this
+README goes in that file. Command-line flags win over it; an unrecognised or
+mistyped key is ignored rather than fatal, so one bad line cannot stop the proxy
+from starting.
+
+```toml
+translator_model = "claude-haiku-4-5"
+preserve_formatting = true
+reply_only_prose_share = 0.35
+max_output_tokens_for_translation = 16000
+```
 
 ## Caveats
 
@@ -280,15 +349,19 @@ code placeholders survive. A confidently inverted negation passes all of them.
 
 So the defence is visibility rather than detection.
 
-**Every translated response says so.** Three headers come back on each reply:
+**Every translated response says so.** These headers come back on each reply:
 
 | Header | Meaning |
 | --- | --- |
 | `x-lingua-translated` | `true` or `false` |
 | `x-lingua-source-lang` | the language that was detected |
 | `x-lingua-prompt-en` | the English the model actually received, percent-encoded |
+| `x-lingua-reply-only` | present when your prompt was sent untranslated and only the reply was translated |
 
-If an answer looks like it addressed a different question, that third header
+`x-lingua-prompt-en` is absent on a reply-only request, because there was no
+English prompt: the model received your own words.
+
+If an answer looks like it addressed a different question, `x-lingua-prompt-en`
 tells you whether the model misunderstood you or the proxy mistranslated you.
 
 **Check before you spend.** Send `x-lingua-review: true` and the proxy returns
@@ -373,8 +446,12 @@ what translation requires.
 
 - Sentence-boundary streaming translation
 - DeepL and LibreTranslate adapters (the interface exists in v0.1)
-- Optional system-prompt translation
 - Windows support
+
+Not planned: translating the system prompt. It is the largest block of tokens
+and one of the cheapest, because it is cached; rewriting it would cost more in
+cache misses than it could save. See
+[Why the output side](#why-the-output-side-and-not-the-system-prompt).
 
 ## Contributing
 

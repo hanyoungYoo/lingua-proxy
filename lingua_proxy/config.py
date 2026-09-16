@@ -135,6 +135,70 @@ def resolve_openai_upstream(
     return DEFAULT_OPENAI_API_URL
 
 
+#: Settings a user may set in ``config.toml``, with the type each must have.
+#: Upstream URLs are resolved separately because they also consult the
+#: environment and the client's own settings file.
+_TOML_SETTINGS: dict[str, type | tuple[type, ...]] = {
+    "host": str,
+    "port": int,
+    "translator_model": str,
+    "translator_base_url": str,
+    "translator_api_key": str,
+    "translator_format": str,
+    "min_chars": int,
+    "min_confidence": (int, float),
+    "memo_persist": bool,
+    "memo_max_entries": int,
+    "count_tokens_enabled": bool,
+    "ping_interval": (int, float),
+    "max_output_tokens_for_translation": int,
+    "preserve_formatting": bool,
+    "reply_only_prose_share": (int, float),
+}
+
+#: Settings that name a filesystem path.
+_TOML_PATH_SETTINGS = ("memo_path", "cost_log_path", "audit_log_path")
+
+#: Settings that are a list of strings.
+_TOML_TUPLE_SETTINGS = ("skip_models", "languages")
+
+
+def _settings_from_toml(config_path: pathlib.Path | None = None) -> dict:
+    """Read recognised settings out of the config file.
+
+    Unknown keys and wrongly typed values are ignored rather than fatal. The
+    file is hand-edited, and a typo in one option should not stop the proxy
+    from starting with sane defaults for the rest.
+    """
+    cfg = _read_toml(config_path if config_path is not None else default_config_path())
+    if not cfg:
+        return {}
+
+    out: dict = {}
+    for key, expected in _TOML_SETTINGS.items():
+        if key not in cfg:
+            continue
+        value = cfg[key]
+        # bool is a subclass of int, so an explicit check keeps `port = true`
+        # from being accepted as an integer.
+        if expected is not bool and isinstance(value, bool):
+            continue
+        if isinstance(value, expected):
+            out[key] = float(value) if expected == (int, float) else value
+
+    for key in _TOML_PATH_SETTINGS:
+        value = cfg.get(key)
+        if isinstance(value, str) and value.strip():
+            out[key] = pathlib.Path(value).expanduser()
+
+    for key in _TOML_TUPLE_SETTINGS:
+        value = cfg.get(key)
+        if isinstance(value, list) and all(isinstance(item, str) for item in value):
+            out[key] = tuple(value)
+
+    return out
+
+
 @dataclass
 class Settings:
     """Runtime settings for one proxy process."""
@@ -192,16 +256,36 @@ class Settings:
     # x-lingua-preserve-formatting header.
     preserve_formatting: bool = True
 
+    # A prompt that is mostly code masks down to almost nothing before it
+    # reaches the translator, so translating the request costs a call and saves
+    # close to zero. Skipping translation outright would also skip the saving,
+    # though: the model would answer the Korean prompt in Korean, and the
+    # expensive model writing Korean is the cost this proxy exists to avoid.
+    #
+    # So below this prose share the request is forwarded in the user's own
+    # language with an instruction to answer in English, and only the reply is
+    # translated. The saving comes from the reply either way; this drops the
+    # request-side fee that was buying nothing. Set to 0.0 to disable.
+    reply_only_prose_share: float = 0.35
+
     @classmethod
     def resolve(
         cls,
         *,
         upstream: str | None = None,
         openai_upstream: str | None = None,
+        config_path: pathlib.Path | None = None,
         **overrides,
     ) -> Settings:
+        """Build settings from the config file, then apply explicit overrides.
+
+        Values passed by the caller win over the config file, which wins over
+        the defaults.
+        """
+        from_file = _settings_from_toml(config_path)
+        from_file.update(overrides)
         return cls(
-            upstream_anthropic_url=resolve_anthropic_upstream(upstream),
-            upstream_openai_url=resolve_openai_upstream(openai_upstream),
-            **overrides,
+            upstream_anthropic_url=resolve_anthropic_upstream(upstream, config_path=config_path),
+            upstream_openai_url=resolve_openai_upstream(openai_upstream, config_path=config_path),
+            **from_file,
         )

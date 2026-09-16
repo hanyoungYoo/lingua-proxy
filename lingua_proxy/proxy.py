@@ -35,7 +35,7 @@ from lingua_proxy.config import Settings, join_upstream
 from lingua_proxy.cost_log import CostLog, CostRow, estimate_tokens, summarize
 from lingua_proxy.detector import Detector
 from lingua_proxy.memo import Memo
-from lingua_proxy.pipeline import Pipeline, TranslationSkipped, parse_body
+from lingua_proxy.pipeline import Outcome, Pipeline, TranslationSkipped, parse_body
 from lingua_proxy.streaming import (
     iter_sse_events,
     translate_anthropic_stream,
@@ -166,6 +166,18 @@ STYLE_INSTRUCTION = (
 )
 
 
+#: Sent with the user's own text, when translating the request could not pay.
+#: The saving comes from the expensive model writing English rather than
+#: Korean, so that is the part worth keeping; the request-side fee is not.
+REPLY_IN_ENGLISH_INSTRUCTION = (
+    "Write your entire answer in English, regardless of the language the user "
+    "wrote in. The user's message may be in another language; understand it as "
+    "written and reply in English. Do not translate the user's message back to "
+    "them, do not apologise for the language, and do not mention this "
+    "instruction."
+)
+
+
 def _wants_bypass(request: Request) -> bool:
     return request.headers.get("x-lingua-bypass", "").strip().lower() in _BYPASS_VALUES
 
@@ -178,6 +190,16 @@ def _wants_formatting_hint(request: Request, settings: Settings) -> bool:
     if header in _BYPASS_VALUES:
         return True
     return settings.preserve_formatting
+
+
+def _wants_reply_only(request: Request, pipeline: Pipeline, body: dict, codec: Codec) -> bool:
+    """Per-request override of the reply-only decision."""
+    header = request.headers.get("x-lingua-reply-only", "").strip().lower()
+    if header in _FALSE_VALUES:
+        return False
+    if header in _BYPASS_VALUES:
+        return True
+    return pipeline.should_use_reply_only(body, codec)
 
 
 def _wants_review(request: Request) -> bool:
@@ -227,6 +249,7 @@ def _get_pipeline(request: Request) -> Pipeline:
         memo=app.state.memo,
         skip_models=settings.skip_models,
         max_output_tokens=settings.max_output_tokens_for_translation,
+        reply_only_prose_share=settings.reply_only_prose_share,
     )
 
 
@@ -457,10 +480,14 @@ async def stream_translated(
         finally:
             await upstream.aclose()
 
+    stream_headers = build_response_headers(upstream)
+    if outcome.reply_only:
+        stream_headers["x-lingua-reply-only"] = "true"
+
     return StreamingResponse(
         body_iter(),
         status_code=upstream.status_code,
-        headers=build_response_headers(upstream),
+        headers=stream_headers,
         media_type="text/event-stream",
     )
 
@@ -498,10 +525,20 @@ async def handle(request: Request, codec: Codec, upstream_base: str) -> Response
         response.headers.update(_transparency_headers(None))
         return response
 
-    try:
-        forwarded, outcome = await pipeline.translate_request(body, codec, source)
-    except TranslationSkipped:
-        return await relay(request, upstream_base)
+    reply_only = _wants_reply_only(request, pipeline, body, codec)
+
+    if reply_only:
+        # The user's own text goes up untouched; only the reply is translated.
+        # Nothing is written to the memo for the request, so a later turn of
+        # this conversation reproduces these bytes exactly as sent.
+        outcome = Outcome(translated=True, reply_only=True, source_lang=source, original_body=body)
+        forwarded = codec.add_system_instruction(body, REPLY_IN_ENGLISH_INSTRUCTION)
+        outcome.forwarded_body = forwarded
+    else:
+        try:
+            forwarded, outcome = await pipeline.translate_request(body, codec, source)
+        except TranslationSkipped:
+            return await relay(request, upstream_base)
 
     if _wants_formatting_hint(request, request.app.state.settings):
         forwarded = codec.add_system_instruction(forwarded, STYLE_INSTRUCTION)
@@ -541,8 +578,15 @@ async def handle(request: Request, codec: Codec, upstream_base: str) -> Response
     record_audit(request, codec, body, forwarded, outcome, source)
 
     headers = build_response_headers(upstream)
-    sent_english = " ".join(ref.text for ref in codec.user_refs(forwarded))
+    # In reply-only mode the prompt was never rewritten, so there is no English
+    # prompt to echo: the header would otherwise report the user's own text as
+    # the translation.
+    sent_english = (
+        None if outcome.reply_only else " ".join(ref.text for ref in codec.user_refs(forwarded))
+    )
     headers.update(_transparency_headers(source, sent_english))
+    if outcome.reply_only:
+        headers["x-lingua-reply-only"] = "true"
 
     return JSONResponse(
         content=localized,

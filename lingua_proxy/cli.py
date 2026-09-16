@@ -17,7 +17,6 @@ from lingua_proxy.config import (
     default_config_path,
     lingua_home,
     resolve_anthropic_upstream,
-    resolve_openai_upstream,
 )
 from lingua_proxy.cost_log import CostLog, summarize
 from lingua_proxy.doctor import run_checks
@@ -60,10 +59,7 @@ def proxy(
 
     from lingua_proxy.proxy import create_app
 
-    settings = Settings(
-        upstream_anthropic_url=resolve_anthropic_upstream(upstream),
-        upstream_openai_url=resolve_openai_upstream(openai_upstream),
-    )
+    settings = Settings.resolve(upstream=upstream, openai_upstream=openai_upstream)
     if host:
         settings.host = host
     if port:
