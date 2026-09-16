@@ -394,3 +394,156 @@ def test_readme_keeps_the_verdict_not_just_the_method_link():
     assert "0–39%" in readme or "0-39%" in readme
     assert "max_tokens" in readme
     assert "44.6%" in readme
+
+
+# -- the live runner must charge the translator -------------------------
+#
+# The fixtures above pin recorded measurements. These pin the machinery that
+# produces new ones: a benchmark that forgets the fee reports a saving the
+# user will not see on their bill.
+
+
+def _fake_upstream(translator_in: int = 400, translator_out: int = 300):
+    """An upstream that speaks the translator's real <seg> protocol.
+
+    A fake that returns a bare string instead of segments makes every
+    translation fail, the proxy falls back to passthrough, and the bench
+    measures a proxy that did nothing -- which looks like a free lunch.
+    """
+    import json
+    import re
+
+    import httpx
+
+    seg_re = re.compile(r'<seg\s+id="(\d+)"\s*>\n?(.*?)\n?</seg>', re.DOTALL)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        model = body.get("model", "")
+        if "haiku" in model:
+            source = body["messages"][-1]["content"]
+            if not isinstance(source, str):
+                source = json.dumps(source)
+            segments = seg_re.findall(source)
+            echoed = "\n".join(f'<seg id="{i}">\n{t}\n</seg>' for i, t in segments)
+            return httpx.Response(
+                200,
+                json={
+                    "id": "t",
+                    "type": "message",
+                    "role": "assistant",
+                    "model": model,
+                    "content": [{"type": "text", "text": f"<segs>\n{echoed}\n</segs>"}],
+                    "stop_reason": "end_turn",
+                    "usage": {
+                        "input_tokens": translator_in,
+                        "output_tokens": translator_out,
+                    },
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "id": "m",
+                "type": "message",
+                "role": "assistant",
+                "model": model,
+                "content": [{"type": "text", "text": "An English answer, reasonably long."}],
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 100, "output_tokens": 80},
+            },
+        )
+
+    return httpx.MockTransport(handler)
+
+
+def test_live_bench_charges_the_translator_fee():
+    """A reported fee of zero means the fee was not measured, not that it was free.
+
+    Every proxied request in the corpus calls the translator twice, so a run
+    that reports translator_cost == 0 is not reporting a cheap translator --
+    it is reporting a broken measurement.
+    """
+    from lingua_proxy.bench_runner import run_live_bench
+
+    report = run_live_bench(upstream="https://fake.test/", transport=_fake_upstream())
+
+    assert report["errors"] == 0
+    assert report["overall"]["translator_cost"] > 0, "the translator's fee was not charged"
+
+
+def test_live_bench_includes_the_fee_in_the_proxied_cost():
+    """The fee must land in the total, not merely be reported beside it."""
+    from lingua_proxy.bench_runner import run_live_bench
+
+    report = run_live_bench(upstream="https://fake.test/", transport=_fake_upstream())
+    overall = report["overall"]
+
+    assert overall["proxied_cost"] > overall["translator_cost"]
+    assert overall["baseline_cost"] > 0
+
+
+def test_live_bench_reports_a_loss_when_the_fee_exceeds_the_saving():
+    """An expensive translator must produce a loss, not a rounded-away saving."""
+    from lingua_proxy.bench_runner import run_live_bench
+
+    report = run_live_bench(
+        upstream="https://fake.test/",
+        transport=_fake_upstream(translator_in=4000, translator_out=3000),
+    )
+
+    assert report["overall"]["savings_ratio"] < 0
+    assert report["overall"]["verdict"] == "loses"
+
+
+def test_a_translated_request_with_no_fee_is_flagged():
+    """The failure mode that makes this tool lie in its own favour.
+
+    This is what a real run reported: savings across every category and a
+    translator fee of $0.00. A translated request always costs something, so
+    a zero fee means the fee was not measured and the saving is overstated.
+    """
+    from lingua_proxy.bench import exit_code_for
+
+    report = build_report(
+        [
+            BenchResult("a", "ko", "chat", baseline_cost=0.40, proxied_cost=0.27, translated=True),
+        ]
+    )
+
+    assert report["unmeasured_fee"] == 1
+    assert exit_code_for(report, min_savings=0.30) == 2, (
+        "a run with an unmeasured fee must not exit zero"
+    )
+
+
+def test_an_untranslated_request_with_no_fee_is_not_flagged():
+    """Passthrough is genuinely free; only translated requests owe a fee."""
+    report = build_report(
+        [
+            BenchResult("a", "en", "chat", baseline_cost=0.10, proxied_cost=0.10, translated=False),
+        ]
+    )
+
+    assert report["unmeasured_fee"] == 0
+
+
+def test_a_measured_fee_is_not_flagged():
+    from lingua_proxy.bench import exit_code_for
+
+    report = build_report(
+        [
+            BenchResult(
+                "a",
+                "ko",
+                "chat",
+                baseline_cost=0.40,
+                proxied_cost=0.30,
+                translator_cost=0.03,
+                translated=True,
+            ),
+        ]
+    )
+
+    assert report["unmeasured_fee"] == 0
+    assert exit_code_for(report, min_savings=0.20) == 0
