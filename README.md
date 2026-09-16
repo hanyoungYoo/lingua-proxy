@@ -403,6 +403,39 @@ slight rewording changes nothing. It is a poor trade when the exact wording is
 the point. The proxy gives you the tools to see what it did and to turn it off
 per request; deciding which of your traffic can tolerate it is yours to make.
 
+### Debugging an answer that came out wrong
+
+The proxy adds a step between what you typed and what the model read, and that
+is a real cost: when an answer surprises you, there is now one more thing it
+could have been. The question this section answers is how long it takes to rule
+that step in or out.
+
+It should take one request. Every reply — streamed or buffered — carries the
+prompt the model actually received:
+
+```
+x-lingua-translated: true
+x-lingua-source-lang: ko
+x-lingua-prompt-en:   Explain why this function is slow...
+```
+
+Read `x-lingua-prompt-en`. If it says what you meant, the translation was not
+the problem and you are debugging the model, exactly as you would without this
+proxy. If it does not, you have found your answer without spending a second
+request.
+
+To rule the proxy out *before* you spend anything, send `x-lingua-review: true`
+and it returns the translation without calling the model at all. To rule it out
+permanently for one request, send `x-lingua-bypass: true` and compare.
+
+For the general case — a failure you noticed later, or one you cannot reproduce
+— turn on the audit log above; it holds both sides of every rewrite, so you can
+go back and look rather than trying to trigger it again.
+
+What none of this gives you is a *warning*. The headers tell you what the proxy
+did; they do not tell you it did it wrong. That judgement stays yours, which is
+the honest version of this trade.
+
 ## Using it behind an existing gateway
 
 lingua-proxy chains. If your client already points at a company LLM gateway,
